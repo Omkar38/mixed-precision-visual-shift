@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "status": "draft_not_runnable",
+  "source": "CSE590 Final proposal, read 2026-10-05",
+  "model": {
+    "id": "HuggingFaceTB/SmolVLM2-2.2B-Instruct",
+    "revision": null,
+    "processor_revision": null
+  },
+  "hardware": {
+    "proposal_gpu_gib": 8,
+    "verified_gpu": null
+  },
+  "quantization": {
+    "components": [
+      "vision",
+      "connector",
+      "language"
+    ],
+    "requested_precisions": [
+      "fp16",
+      "nf4"
+    ],
+    "compute_dtype": null,
+    "double_quantization": null,
+    "actual_module_mapping": null,
+    "supported_candidates": null,
+    "ordered_requested_candidates": [
+      {
+        "id": "v-fp16_c-fp16_l-fp16",
+        "vision": "fp16",
+        "connector": "fp16",
+        "language": "fp16"
+      },
+      {
+        "id": "v-fp16_c-fp16_l-nf4",
+        "vision": "fp16",
+        "connector": "fp16",
+        "language": "nf4"
+      },
+      {
+        "id": "v-fp16_c-nf4_l-fp16",
+        "vision": "fp16",
+        "connector": "nf4",
+        "language": "fp16"
+      },
+      {
+        "id": "v-fp16_c-nf4_l-nf4",
+        "vision": "fp16",
+        "connector": "nf4",
+        "language": "nf4"
+      },
+      {
+        "id": "v-nf4_c-fp16_l-fp16",
+        "vision": "nf4",
+        "connector": "fp16",
+        "language": "fp16"
+      },
+      {
+        "id": "v-nf4_c-fp16_l-nf4",
+        "vision": "nf4",
+        "connector": "fp16",
+        "language": "nf4"
+      },
+      {
+        "id": "v-nf4_c-nf4_l-fp16",
+        "vision": "nf4",
+        "connector": "nf4",
+        "language": "fp16"
+      },
+      {
+        "id": "v-nf4_c-nf4_l-nf4",
+        "vision": "nf4",
+        "connector": "nf4",
+        "language": "nf4"
+      }
+    ]
+  },
+  "data": {
+    "pope_variant": null,
+    "celeba_attributes": null,
+    "split_seed": null,
+    "pilot_questions_total": 100,
+    "development_counts": null,
+    "test_questions_per_domain_planning_estimate": 500,
+    "split_manifests": null
+  },
+  "corruptions": {
+    "types": [
+      "darkness",
+      "gaussian_blur"
+    ],
+    "severities_per_type": 3,
+    "parameters": null,
+    "transform_order": null
+  },
+  "generation": {
+    "prompt": null,
+    "image_resolution": null,
+    "do_sample": false,
+    "max_new_tokens": null,
+    "parser": null
+  },
+  "selection": {
+    "target_fractions": [
+      0,
+      0.25,
+      0.5,
+      0.75,
+      1
+    ],
+    "weight_caps_bytes": null,
+    "tie_break": [
+      "accuracy_desc",
+      "weight_bytes_asc",
+      "candidate_rank_asc"
+    ],
+    "mixture_seed": null,
+    "mixture_group_allocation": null
+  },
+  "analysis": {
+    "test_bootstrap_clusters": {
+      "pope_coco": "original_image_id",
+      "celeba": "identity_id"
+    },
+    "confidence_level": 0.95,
+    "bootstrap_resamples_proposed": 2000,
+    "bootstrap_seed": null
+  },
+  "freeze": {
+    "approved_for_main_run": false,
+    "protocol_hash": null
+  }
+}

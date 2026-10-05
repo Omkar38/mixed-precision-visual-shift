@@ -1,0 +1,39 @@
+# Local environments and credentials
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.netrc
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Python/tool caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+.ipynb_checkpoints/
+.DS_Store
+
+# Restricted data, weights, and generated outputs
+data/
+datasets/
+models/
+checkpoints/
+artifacts/
+runs/
+outputs/
+.cache/
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.log
