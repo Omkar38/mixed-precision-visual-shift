@@ -8,12 +8,12 @@ Use repository-local configuration:
 
 ```bash
 git config --local user.name "Omkar Lashkare"
-git config --local user.email "omkarvilas.lashkare@stonybrook.edu"
+git config --local user.email "lashkareomkar@gmail.com"
 git var GIT_AUTHOR_IDENT
 git var GIT_COMMITTER_IDENT
 ```
 
-This email is verified against the project proposal, not against GitHub. For GitHub to associate commits with Omkar's profile, it must be one of his verified account emails. If Omkar provides his GitHub no-reply address instead, use that exact address for future commits; do not invent one.
+Omkar supplied this email directly for repository publication on 2026-10-05. GitHub associates commits with his profile if it is a verified account email. Preserve the initial commit's existing author and committer identity; use the requested email for new commits.
 
 Environment variables such as GIT_AUTHOR_NAME or GIT_COMMITTER_EMAIL can override local configuration. Inspect effective identity before committing; do not print credentials. The initial commit explicitly sets both author and committer to Omkar. Do not append a Codex/Claude co-author trailer.
 
