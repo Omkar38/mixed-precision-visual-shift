@@ -59,4 +59,4 @@ The repository expands the proposal into implementation instructions. It does no
 
 ## Git ownership
 
-The initial local commit uses **Omkar Lashkare <omkarvilas.lashkare@stonybrook.edu>**. This email comes from the proposal; its association with Omkar's GitHub account has not been verified. See [Git workflow](docs/GIT_WORKFLOW.md) for publishing and attribution. Default publication should be a private repository until Omkar chooses otherwise.
+The initial local commit uses **Omkar Lashkare <omkarvilas.lashkare@stonybrook.edu>**. Omkar requested **lashkareomkar@gmail.com** for subsequent local commits. The initial commit's authorship was preserved. See [Git workflow](docs/GIT_WORKFLOW.md) for attribution details. Omkar created this GitHub repository as public.

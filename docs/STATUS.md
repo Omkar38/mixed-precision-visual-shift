@@ -8,10 +8,10 @@ Updated: 2026-10-05.
 - Created the research context, shared agent instructions, implementation plan, and draft protocol.
 - Added a dependency-free environment inventory script.
 - Created a local Git repository using Omkar's author and committer identity.
+- Published the repository at `https://github.com/Omkar38/mixed-precision-visual-shift`.
 
 ## Not completed
 
-- GitHub publication.
 - Tested/pinned ML environment or verified 8GB GPU availability.
 - Dataset acquisition and split preparation.
 - Model loading, component quantization audit, or pilot.
@@ -34,8 +34,9 @@ Every coding session should append what changed, exact validation commands and o
 
 - Omkar requested publication to a new repository and supplied `lashkareomkar@gmail.com` for future commits. Updated `docs/GIT_WORKFLOW.md` accordingly and set the repository-local Git identity to `Omkar Lashkare <lashkareomkar@gmail.com>`. The initial commit retains its existing authorship.
 - Ran `git status --short --branch` (clean `main` before this documentation change), `git remote -v` (no remote), `git ls-files` (only the research scaffold), and `du -sh . .git` (236K/140K). No raw data, checkpoints, or large artifacts are tracked.
-- Ran `gh auth status`: the saved `Omkar38` token is invalid. Started `gh auth login -h github.com -p https -w`; GitHub device authorization is pending.
-- Next publication action: complete GitHub device authorization, verify the authenticated login, create a private `mixed-precision-visual-shift` repository, push `main`, and verify its remote commit. No scientific implementation or experiment was run in this session.
+- Ran `gh auth status`: the saved `Omkar38` token initially appeared invalid. Completed `gh auth login -h github.com -p https -w`, then verified the authenticated account with `gh api user --jq .login` (`Omkar38`).
+- Omkar created the GitHub repository as public. Added and verified `README.md` through the connected GitHub account, fetched that commit with `git fetch origin main`, merged the two histories with `git merge --allow-unrelated-histories --no-commit origin/main`, then ran `git commit -m 'Merge GitHub README with local project history'` and `git push -u origin main` successfully.
+- The repository now contains the existing research scaffold and README. No scientific implementation or experiment was run in this session. Next: run M0 on the experiment machine.
 
 ## Scaffold validation (2026-10-05)
 
