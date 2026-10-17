@@ -11,11 +11,11 @@ CSE590-01, Fall 2026 — Gauri Chabukswar, Omkar Lashkare, and Kaushal Satish Sh
 1. Read [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) for the complete project explanation.
 2. Read [AGENTS.md](AGENTS.md) for instructions shared by coding agents.
 3. Follow [the implementation plan](docs/IMPLEMENTATION_PLAN.md), beginning with M0.
-4. Record progress in [STATUS.md](docs/STATUS.md) and decisions in [DECISIONS.md](docs/DECISIONS.md).
+4. Record progress in [live_STATUS.md](docs/live_STATUS.md) and decisions in [DECISIONS.md](docs/DECISIONS.md).
 
 Open this repository folder in Claude Code or Codex. Claude's entry file imports the shared agent instructions; Codex uses `AGENTS.md`. Give either agent this prompt:
 
-> Read AGENTS.md, PROJECT_CONTEXT.md, docs/IMPLEMENTATION_PLAN.md, and docs/STATUS.md. Start with M0 and then implement M1. Verify the environment, inspect the actual model architecture, and build the component-level quantization audit. Do not assume all eight precision configurations work. Use small, reviewable changes and report what you actually ran. Keep the current research question and evaluation protocol. For commits made on my behalf, use the Git identity in docs/GIT_WORKFLOW.md, with no AI co-author trailer.
+> Read AGENTS.md, PROJECT_CONTEXT.md, docs/IMPLEMENTATION_PLAN.md, and docs/live_STATUS.md. Start with M0 and then implement M1. Verify the environment, inspect the actual model architecture, and build the component-level quantization audit. Do not assume all eight precision configurations work. Use small, reviewable changes and report what you actually ran. Keep the current research question and evaluation protocol. For commits made on my behalf, use the Git identity in docs/GIT_WORKFLOW.md, with no AI co-author trailer.
 
 ## What goes in and comes out?
 

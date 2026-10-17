@@ -1,4 +1,14 @@
 {
+    "python.defaultInterpreterPath": "/opt/homebrew/Caskroom/miniforge/base/envs/mpvs-m1/bin/python",
+    "python.terminal.activateEnvironment": true,
     "python-envs.defaultEnvManager": "ms-python.python:conda",
-    "python-envs.defaultPackageManager": "ms-python.python:conda"
+    "python-envs.defaultPackageManager": "ms-python.python:conda",
+    "python-envs.terminal.autoActivationType": "command",
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}/src"
+    ],
+    "python.testing.pytestArgs": [
+        "tests"
+    ],
+    "python.testing.pytestEnabled": true
 }
