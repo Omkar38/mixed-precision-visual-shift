@@ -35,6 +35,24 @@ Git commits made on Omkar's behalf use Omkar Lashkare and the email listed in th
 | Bootstrap settings and summary weights | Declared analysis plan before test scoring |
 | Need for a fallback model | Measured failure/runtime evidence |
 
+## 2026-10-16 — Mac M1 development environment
+
+Use a Python 3.11 Conda environment named `mpvs-m1` for the Apple Silicon
+development slice. Compatibility testing selected PyTorch 2.14.1,
+Transformers 4.52.4, and Accelerate 1.15.0; the initially resolved Transformers
+5.20.1 failed SmolVLM image-token merging and was rejected. Direct dependencies
+are pinned in `environment-macos.yml`.
+
+Resolve the model and processor to immutable Hugging Face revision
+`482adb537c021c86670beed01cd58990d01e72e4`. Verified component roots are
+`model.vision_model`, `model.connector`, and `model.text_model`; `lm_head` is
+assigned to the language component for inventory purposes.
+
+This environment is for architecture inspection, FP16 loading, accounting, and
+unit tests only. PyTorch is built with MPS support but reports MPS unavailable
+on this host, and CUDA/bitsandbytes are absent. NF4 candidates are explicitly
+unsupported here. FP16 load success is not inference or quantization evidence.
+
 ## Template for a new decision
 
 Date:

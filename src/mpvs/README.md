@@ -1,3 +1,22 @@
-# Planned implementation package
+# M1 model audit
 
-No experiment implementation exists yet. Add Python modules here in the order described in docs/IMPLEMENTATION_PLAN.md. Establish packaging and dependency versions during M0/M1 rather than treating an untested dependency list as a working environment.
+The current vertical slice inventories the immutable SmolVLM2 checkpoint, its
+vision/connector/language module mapping, stored tensor dtypes, and unique
+weight storage. It does not yet implement or validate bitsandbytes NF4.
+
+```bash
+conda env create -f environment-macos.yml
+conda activate mpvs-m1
+PYTHONPATH=src python -m mpvs.cli candidates
+PYTHONPATH=src python -m mpvs.cli audit \
+  --candidate v-fp16_c-fp16_l-fp16 \
+  --device cpu \
+  --output artifacts/m1-fp16.json
+```
+
+Add `--smoke-inference` only on a host with a validated execution backend.
+NF4 requests exit nonzero with a structured `unsupported` record until the
+separate CUDA/bitsandbytes implementation is audited. Generated audits and
+model caches are intentionally ignored.
+`requirements-macos-lock.txt` is the complete tested package inventory;
+`environment-macos.yml` is the environment creation entry point.
