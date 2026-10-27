@@ -47,6 +47,10 @@ python3 scripts/preflight.py --output artifacts/preflight.json
 
 There is no inference command yet. M0 will establish a tested dependency environment; M1 will establish which precision configurations are real.
 
+## Colab FP16 smoke test
+
+The [M1 Colab CUDA notebook](notebooks/m1_colab_cuda_nf4.ipynb) is a narrow FP16 smoke test for an L4 runtime. It runs preflight, loads the pinned model, performs one synthetic inference, and records peak GPU memory. It does not implement NF4 or count as a completed experiment. Publish the `Gauri-Commits` branch before opening the notebook in Colab so its clone step can find the branch.
+
 ## Data and outputs
 
 Keep dataset images under `data/`, model weights under `models/`, and generated results under `artifacts/` or `runs/`. These paths are ignored by Git. Commit code, configuration, small permitted split manifests, and report summaries deliberately. Do not commit CelebA images, model weights, credentials, or full prediction dumps.
