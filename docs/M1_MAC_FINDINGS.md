@@ -1,32 +1,66 @@
-# M1 Mac Development Slice: Findings and Handoff
+# M1 Model Audit Findings: Mac Development and T4 Validation
 
-Date: 2026-10-16  
-Status: Mac implementation and FP16 loading validated; M1 remains incomplete
-until CUDA/bitsandbytes quantization and inference are audited.
+Date: 2026-10-28
+Status: **M1 acceptance criteria met** by the complete CUDA audit at repository
+commit `fdeea24367cf8f64fa9b5b8e9aea9de3beb5eafe`.
 
-## 1. Objective
+## 1. Scope and conclusion
 
-This work established the M0 environment prerequisite and implemented the
-Mac-compatible portion of M1. The goal was to inspect the real
-`HuggingFaceTB/SmolVLM2-2.2B-Instruct` architecture, define the requested
-FP16/NF4 candidate grid, audit stored model state, and measure FP16 weight
-storage without claiming unsupported NF4 results.
+M1 asked whether the vision encoder, connector, and language backbone of
+`HuggingFaceTB/SmolVLM2-2.2B-Instruct` can be controlled independently at FP16
+or NF4 for supported linear layers, while measuring actual stored weight state
+instead of trusting loader flags.
 
-The scientific requirements and M1 acceptance criteria remain defined in
-[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) and
-[EXPERIMENT_PROTOCOL.md](EXPERIMENT_PROTOCOL.md).
+The Mac work established the environment, immutable checkpoint revision,
+architecture mapping, FP16 reference, audit code, and unit tests. The final
+audit then ran on a Colab Tesla T4. All eight requested FP16/NF4 tuples:
 
-## 2. Environment Established
+- loaded independently from the same original checkpoint;
+- matched their requested component allocation;
+- had distinct effective-configuration signatures;
+- completed one deterministic synthetic-image inference; and
+- produced measured unique weight-storage totals, including exposed
+  quantization metadata and persistent buffers.
 
-The Conda environment is named `mpvs-m1` and uses Python 3.11.17. The tested
-direct dependencies are recorded in
-[environment-macos.yml](../environment-macos.yml), while the complete installed
-package inventory is in
+The smallest measured cap containing at least two distinct supported
+configurations is **1,587,421,408 bytes**. This satisfies the M1 acceptance
+criterion in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). It demonstrates
+candidate feasibility only; it does not freeze the final experimental cap or
+provide model-accuracy evidence.
+
+## 2. Immutable model and component mapping
+
+```text
+Checkpoint: HuggingFaceTB/SmolVLM2-2.2B-Instruct
+Model revision: 482adb537c021c86670beed01cd58990d01e72e4
+Processor revision: 482adb537c021c86670beed01cd58990d01e72e4
+```
+
+The verified research-component roots are:
+
+| Research component | Verified module root |
+| --- | --- |
+| Vision encoder | `model.vision_model` |
+| Connector | `model.connector` |
+| Language backbone | `model.text_model` |
+| Preserved language output head | `lm_head` |
+
+`lm_head` is a documented FP16 exception for every candidate. In this project,
+an “NF4 component” means that all supported linear layers under that component
+are NF4. Unsupported layer types, embeddings, normalization parameters,
+convolutions, biases, and the output head may remain FP16 and are included in
+the measured storage total.
+
+## 3. Environments used
+
+### 3.1 Mac development environment
+
+The Conda environment is `mpvs-m1` with Python 3.11.17. Reproducible direct
+dependencies are recorded in [environment-macos.yml](../environment-macos.yml),
+and the complete installed inventory is recorded in
 [requirements-macos-lock.txt](../requirements-macos-lock.txt).
 
-Important resolved versions:
-
-| Package | Version |
+| Package | Mac version |
 | --- | ---: |
 | PyTorch | 2.14.1 |
 | Transformers | 4.52.4 |
@@ -34,155 +68,293 @@ Important resolved versions:
 | NumPy | 2.4.6 |
 | Pillow | 13.0.0 |
 
-Transformers 5.20.1 was initially installed but rejected after its SmolVLM
-image-token merger failed during the smoke test. Version 4.52.4 loads the
-checkpoint correctly and is the recorded Mac compatibility version.
+Transformers 5.20.1 was rejected after its SmolVLM image-token merger failed
+during the initial smoke-test work. Transformers 4.52.4 loaded the pinned
+checkpoint correctly and was retained for both the Mac architecture audit and
+the T4 quantization audit.
 
-Environment commands:
+The Mac has no NVIDIA runtime, bitsandbytes was absent, and PyTorch reported
+MPS built but unavailable. Consequently, the Mac was used for FP16 loading,
+architecture inspection, implementation, and unit tests—not NF4 validation.
 
-```bash
-conda create -n mpvs-m1 python=3.11 pip -y
-conda activate mpvs-m1
-python -m pip install torch torchvision transformers accelerate \
-  Pillow numpy pytest sentencepiece protobuf num2words
-python -m pip check
-python scripts/preflight.py --output artifacts/preflight-macos-m1.json
+### 3.2 Colab CUDA audit environment
+
+| Item | Measured value |
+| --- | --- |
+| GPU | Tesla T4, 15,360 MiB |
+| Driver reported by `nvidia-smi` | 580.82.07 |
+| Python | 3.13.16 |
+| PyTorch | 2.11.0+cu130 |
+| CUDA runtime reported by PyTorch | 13.0 |
+| Compute capability | 7.5 |
+| Transformers | 4.52.4 |
+| Accelerate | 1.15.0 |
+| bitsandbytes | 0.50.2 |
+| NumPy | 2.1.3 |
+| Pillow | 11.3.0 |
+
+The environment inventory is stored in the ignored artifact
+`artifacts/m1-audit-t4-fdeea243/preflight-colab-t4.json`. The preflight file is
+an inventory, not the quantization result; the eight candidate audit files are
+the validation evidence.
+
+## 4. Implemented audit path
+
+- [model.py](../src/mpvs/model.py) records immutable revisions, resolves the
+  device, loads every candidate freshly from the original checkpoint, discovers
+  components, and runs deterministic synthetic inference.
+- [quantization.py](../src/mpvs/quantization.py) defines the stable eight-tuple
+  grid, builds the selective bitsandbytes loader policy, classifies modules,
+  inspects realized quantization state, detects mismatches, and computes stable
+  effective signatures.
+- [memory.py](../src/mpvs/memory.py) counts unique underlying storage across
+  parameters, persistent buffers, and tensors reachable from bitsandbytes
+  `quant_state`, without double-counting shared storage.
+- [cli.py](../src/mpvs/cli.py) writes atomic machine-readable candidate audits,
+  distinguishes unsupported/load/audit/inference failures, and summarizes the
+  isolated grid.
+- [m1_colab_cuda_nf4.ipynb](../notebooks/m1_colab_cuda_nf4.ipynb) installs the
+  validated CUDA-side versions, runs each candidate in a fresh subprocess, and
+  packages the generated audit artifacts.
+- [test_quantization.py](../tests/test_quantization.py),
+  [test_memory.py](../tests/test_memory.py), [test_cli.py](../tests/test_cli.py),
+  and [test_cli_audit.py](../tests/test_cli_audit.py) cover stable candidates,
+  component boundaries, requested-versus-realized state, effective signatures,
+  memory deduplication, quantization metadata, grid acceptance, and structured
+  unsupported results.
+
+The fixed CUDA NF4 policy was:
+
+| Setting | Value |
+| --- | --- |
+| Quantization type | NF4 |
+| Compute dtype | FP16 |
+| Quantized storage dtype | uint8 |
+| Double quantization | Disabled |
+| CPU offload | Disabled |
+| Preserved exception | `lm_head` in FP16 |
+| Candidate isolation | Fresh subprocess and checkpoint load |
+
+## 5. Realized component coverage
+
+The fully NF4 candidate established the number of independently controlled
+supported linear layers:
+
+| Component | Supported linear modules | Quantized in fully NF4 | Exceptions |
+| --- | ---: | ---: | --- |
+| Vision encoder | 162 | 162 | None |
+| Connector | 1 | 1 | None |
+| Language backbone | 168 | 168 | `lm_head` retained in FP16 |
+| Total | 331 | 331 | One documented output-head exception |
+
+Across all eight reports:
+
+- every requested NF4 linear module was a
+  `bitsandbytes.nn.modules.Linear4bit` converted from
+  `torch.nn.modules.linear.Linear`;
+- every quantized module reported NF4, FP16 compute, uint8 storage, and no
+  double quantization;
+- every requested FP16 component had zero quantized modules and retained FP16
+  stored weights;
+- `lm_head` remained unquantized FP16;
+- every component mismatch list was empty; and
+- no unclassified module was quantized.
+
+The audit therefore validates independent component control. It is not global
+quantization relabeled as mixed precision.
+
+## 6. Candidate storage and smoke-inference results
+
+Tuple order below is **vision / connector / language**. Weight storage counts
+unique parameter storage, persistent buffers, and exposed quantization metadata.
+Peak reserved memory is a separate CUDA runtime measurement from the synthetic
+inference.
+
+| Candidate | Weight bytes | Weight GiB | Peak reserved GiB | Generation seconds | Result |
+| --- | ---: | ---: | ---: | ---: | --- |
+| NF4 / NF4 / NF4 | 1,556,898,080 | 1.450 | 2.283 | 3.98 | Success |
+| NF4 / FP16 / NF4 | 1,587,421,408 | 1.478 | 2.283 | 4.05 | Success |
+| FP16 / NF4 / NF4 | 2,147,801,504 | 2.000 | 2.600 | 3.90 | Success |
+| FP16 / FP16 / NF4 | 2,178,324,832 | 2.029 | 2.627 | 3.89 | Success |
+| NF4 / NF4 / FP16 | 3,872,143,136 | 3.606 | 4.182 | 3.98 | Success |
+| NF4 / FP16 / FP16 | 3,902,666,464 | 3.635 | 4.213 | 3.85 | Success |
+| FP16 / NF4 / FP16 | 4,463,046,560 | 4.157 | 4.781 | 4.01 | Success |
+| FP16 / FP16 / FP16 | 4,493,569,888 | 4.185 | 4.957 | 3.78 | Success |
+
+Every candidate returned `Yes.` for the deterministic 384×384 synthetic blue
+image prompt, using greedy decoding and at most four new tokens. This only
+checks execution viability. It is not a task-accuracy, robustness, real-image,
+or throughput result.
+
+For the fully NF4 candidate, the total consists of:
+
+| Storage category | Bytes |
+| --- | ---: |
+| Parameter storage | 1,429,194,464 |
+| Persistent buffers | 128 |
+| Exposed quantization metadata | 127,703,488 |
+| Total | 1,556,898,080 |
+
+The FP16 reference contains 4,493,569,760 parameter bytes plus 128 persistent
+buffer bytes, matching the earlier Mac CPU measurement exactly.
+
+## 7. Independent component effects on storage
+
+Holding the other two components at FP16, replacing one component's supported
+linear layers with NF4 reduced measured storage by:
+
+| Component changed to NF4 | Bytes saved versus all-FP16 |
+| --- | ---: |
+| Vision encoder | 590,903,424 |
+| Connector | 30,523,328 |
+| Language backbone | 2,315,245,056 |
+
+These savings are exactly additive:
+
+```text
+4,493,569,888
+- 590,903,424
+-  30,523,328
+- 2,315,245,056
+= 1,556,898,080 bytes
 ```
 
-For reproduction from the tracked specification:
+The result provides a storage-level cross-check that the three component
+controls were applied independently.
+
+## 8. Measured feasible caps
+
+All eight candidates are supported and have distinct effective signatures. The
+smallest exact threshold admitting at least two candidates is:
+
+```text
+1,587,421,408 bytes
+```
+
+At that threshold, the eligible candidates are:
+
+1. NF4 / NF4 / NF4 — 1,556,898,080 bytes.
+2. NF4 / FP16 / NF4 — 1,587,421,408 bytes.
+
+The audit summary also enumerates larger exact thresholds admitting three
+through eight candidates. These measurements establish that a common cap is
+possible, satisfying M1. The cap or caps used for the main selection experiment
+must still be chosen and frozen during the pilot without examining comparative
+test accuracy. The smallest cap may be scientifically narrow because its two
+candidates differ only in connector precision.
+
+## 9. Verification and acceptance decision
+
+Mac-side validation after the CUDA implementation:
+
+```text
+conda run -n mpvs-m1 python -m pytest -q
+14 passed
+
+Notebook JSON and code-cell compilation: passed
+Python source compilation: passed
+Wheel construction: passed
+Structured unsupported-candidate check: passed
+Git whitespace check: passed
+```
+
+Independent inspection of the downloaded T4 artifacts confirmed:
+
+```text
+Raw candidate reports: 8
+Unique candidate IDs: 8
+Raw memory values match summary: yes
+Identical model and processor revisions: yes
+Identical recorded execution environment: yes
+All loads successful: yes
+All requested allocations matched: yes
+All inference smoke tests successful: yes
+Failure reasons/stages present: none
+Unclassified quantized modules: none
+Distinct effective signatures: 8
+Summary acceptance: true
+```
+
+The primary machine-readable evidence is retained locally under the ignored
+directory:
+
+```text
+artifacts/m1-audit-t4-fdeea243/
+  m1-audit-t4-summary.json
+  m1-audit-t4-v-fp16_c-fp16_l-fp16.json
+  m1-audit-t4-v-fp16_c-fp16_l-nf4.json
+  m1-audit-t4-v-fp16_c-nf4_l-fp16.json
+  m1-audit-t4-v-fp16_c-nf4_l-nf4.json
+  m1-audit-t4-v-nf4_c-fp16_l-fp16.json
+  m1-audit-t4-v-nf4_c-fp16_l-nf4.json
+  m1-audit-t4-v-nf4_c-nf4_l-fp16.json
+  m1-audit-t4-v-nf4_c-nf4_l-nf4.json
+  preflight-colab-t4.json
+```
+
+**Conclusion:** M1 is implemented, unit-tested, CUDA/NF4-audited, and accepted.
+Independent control is achievable for the full requested grid, so no model or
+quantizer fallback is required at this milestone.
+
+## 10. Limitations
+
+- The smoke input is synthetic and contains no dataset example.
+- The generated answer verifies execution only; it provides no accuracy or
+  robustness evidence.
+- Peak CUDA memory is for batch size 1, one 384×384 image, a short prompt, and
+  four generated tokens. It does not prove that the eventual pilot or full
+  evaluation workload fits unchanged.
+- Weight storage and peak GPU memory are different quantities. Activations, KV
+  cache, allocator behavior, and temporary buffers are not part of the weight
+  cap.
+- Load time includes local cache and runtime effects and is not a stable
+  throughput benchmark.
+- The final experimental cap set, prompt, parser, corruption severities, and
+  batch/execution constraints remain pilot decisions.
+- No POPE-COCO or CelebA data, training, fine-tuning, calibration, development
+  selection, or held-out test evaluation occurred in M1.
+
+## 11. Reproduction commands
+
+Mac development setup:
 
 ```bash
 conda env create -f environment-macos.yml
 conda activate mpvs-m1
 python -m pip install -e .
+python -m pytest -q
+python scripts/preflight.py --output artifacts/preflight-macos-m1.json
 ```
 
-## 3. Model and Processor Resolution
-
-Both model and processor are pinned to immutable revision:
-
-```text
-Model: HuggingFaceTB/SmolVLM2-2.2B-Instruct
-Revision: 482adb537c021c86670beed01cd58990d01e72e4
-```
-
-The defaults and fresh FP16 loader are implemented in
-[model.py](../src/mpvs/model.py). Each load starts from the original checkpoint;
-the code does not quantize or dequantize an already modified model.
-
-Inspection of the installed model implementation established these component
-roots:
-
-| Research component | Verified module root |
-| --- | --- |
-| Vision encoder | `model.vision_model` |
-| Connector | `model.connector` |
-| Language backbone | `model.text_model` |
-| Language output head | `lm_head` |
-
-The mapping and strict prefix-boundary classification are implemented in
-[quantization.py](../src/mpvs/quantization.py).
-
-## 4. Implemented M1 Functionality
-
-- [model.py](../src/mpvs/model.py) defines immutable model metadata, device
-  resolution, fresh FP16 loading, component discovery, and a deterministic
-  synthetic-image smoke-inference function.
-- [quantization.py](../src/mpvs/quantization.py) defines all eight requested
-  `(vision, connector, language)` FP16/NF4 candidates, module-state inspection,
-  requested-versus-realized coverage, and effective-configuration signatures.
-- [memory.py](../src/mpvs/memory.py) counts unique underlying parameter and
-  persistent-buffer storage without double-counting shared storage, and reports
-  component totals separately.
-- [cli.py](../src/mpvs/cli.py) exposes `candidates` and `audit` commands, writes
-  audit JSON atomically, and distinguishes unsupported candidates, load
-  failures, and inference failures.
-- [test_quantization.py](../tests/test_quantization.py) and
-  [test_memory.py](../tests/test_memory.py) cover candidate stability, module
-  boundaries, realized allocation reporting, signatures, NF4 rejection, shared
-  storage, buffers, and unclassified tensors.
-
-Example commands:
+List the stable grid:
 
 ```bash
 mpvs candidates
-
-mpvs audit \
-  --candidate v-fp16_c-fp16_l-fp16 \
-  --device cpu \
-  --output artifacts/m1-fp16-macos.json
 ```
 
-NF4 requests currently return a structured `unsupported` record and a nonzero
-exit code. This gate prevents a requested NF4 candidate from being silently
-loaded and reported as FP16.
+Audit one CUDA candidate from a fresh process:
 
-## 5. Verified Findings
-
-The full FP16 checkpoint loaded successfully on CPU and its module/tensor state
-was audited. Under the implemented unique-storage convention:
-
-| Measurement | Bytes |
-| --- | ---: |
-| Vision parameters | 825,974,496 |
-| Connector parameters | 42,467,328 |
-| Language parameters, including `lm_head` | 3,625,127,936 |
-| Persistent buffers | 128 |
-| Total FP16 weight storage | 4,493,569,888 |
-
-These are model-storage measurements, not peak process memory or GPU-memory
-measurements. NF4 quantization metadata is not included because no real NF4
-model has been constructed yet.
-
-Validation completed:
-
-```text
-conda run -n mpvs-m1 python -m pytest -q
-7 passed
-
-conda run -n mpvs-m1 python -m pip check
-No broken requirements found.
+```bash
+python -m mpvs.cli audit \
+  --candidate v-nf4_c-nf4_l-nf4 \
+  --device cuda \
+  --smoke-inference \
+  --output artifacts/m1-audit-t4-v-nf4_c-nf4_l-nf4.json
 ```
 
-## 6. Limitations and Failed Checks
+The reproducible complete-grid entry point is
+[m1_colab_cuda_nf4.ipynb](../notebooks/m1_colab_cuda_nf4.ipynb). It records the
+repository commit, environment, immutable model revisions, per-candidate audit,
+and summary before packaging the ignored artifacts.
 
-- This Apple M5 Mac has no NVIDIA CUDA runtime or bitsandbytes installation.
-- PyTorch reports `mps_built=True` but `mps_available=False` in the current
-  execution environment.
-- The FP16 checkpoint loaded on CPU, but synthetic FP16 CPU generation was not
-  validated. One attempt exposed an NNPack tensor-type/backend limitation; the
-  corrected long-running CPU attempt did not produce a successful replacement
-  audit. It must not be reported as inference success.
-- No NF4 candidate has been built, loaded, measured, deduplicated, or run.
-- No memory cap is established because M1 requires at least two distinct,
-  feasible measured candidates on the target execution host.
-- No dataset, pilot question, development/test example, training, calibration,
-  or experimental evaluation was used.
+## 12. Handoff to M2 and M3
 
-Generated audits and downloaded weights live in ignored cache/artifact paths.
-The concise tracked status is maintained in [live_STATUS.md](live_STATUS.md), and material
-environment decisions are recorded in [DECISIONS.md](DECISIONS.md).
+M2 may now proceed with normalized POPE-COCO and CelebA records, group-disjoint
+pilot/development/test manifests, deterministic darkness and Gaussian-blur
+transforms, and synthetic leakage/determinism tests. M2 must not use test
+accuracy to choose data, corruptions, or severities.
 
-## 7. Next Steps on the NVIDIA Host
-
-1. Run [preflight.py](../scripts/preflight.py) and record the GPU model, memory,
-   driver, CUDA runtime, disk availability, and installed package state.
-2. Create a separate CUDA environment and test a mutually compatible PyTorch,
-   Transformers 4.52.4, Accelerate, and bitsandbytes combination. Do not assume
-   the Mac lock file is the CUDA lock file.
-3. Run one batch-size-1 FP16 synthetic inference and record peak allocated and
-   reserved GPU memory separately from weight storage.
-4. Implement selective NF4 replacement for supported linear layers using the
-   verified component roots. Reconstruct every candidate independently from
-   revision `482adb537c021c86670beed01cd58990d01e72e4`.
-5. Audit actual module classes, `Params4bit`/quantization state, compute dtype,
-   double-quantization setting, exceptions, buffers, and quantization metadata.
-6. Run one synthetic inference per feasible candidate in isolated processes,
-   record failures honestly, and compute effective signatures to remove
-   duplicate realized configurations.
-7. Identify at least one measured weight-memory cap containing two distinct
-   feasible candidates. Only then can M1 acceptance be considered satisfied.
-8. Update [live_STATUS.md](live_STATUS.md) and [DECISIONS.md](DECISIONS.md) with exact CUDA
-   commands and evidence before beginning M2.
-
-Do not start bulk inference or claim M1 complete until these CUDA checks pass.
+Before bulk inference, M3 must still implement and validate fixed prompting,
+strict yes/no parsing, resumable prediction caching, real-image pilot execution,
+resource estimation, and protocol freezing. The pilot must select final caps
+and execution constraints before comparative test accuracy is examined.
