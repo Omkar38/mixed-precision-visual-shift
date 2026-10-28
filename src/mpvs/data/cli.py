@@ -171,7 +171,7 @@ def expand_manifest_variants(args: argparse.Namespace) -> int:
         raise ValueError("corruption specification must be a JSON array")
     specs = [CorruptionSpec.from_dict(value) for value in raw_specs]
     variants = expand_variants(base, specs)
-    validation = validate_variant_inheritance(base, variants)
+    validation = validate_variant_inheritance(base, variants, specs)
     if not validation["valid"]:
         raise AssertionError(f"variant inheritance failed: {validation}")
     digest = write_jsonl_immutable(args.output, (variant.to_dict() for variant in variants))

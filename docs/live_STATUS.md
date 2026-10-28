@@ -32,6 +32,38 @@ files, record source schemas/checksums/counts, propose explicit dataset choices,
 and run the group-leakage, determinism, balance, and pilot-answerability checks.
 Do not freeze severities or split sizes from synthetic fixtures.
 
+## 2026-10-28 — Gauri M2 review: paired-variant completeness and duplicate-image leakage
+
+- Reviewed `src/mpvs/splits.py` and `src/mpvs/corruptions.py` on `Kaushal-Commits`
+  (`cb9feb6`). The existing 17 M2 tests passed. Two validation gaps were found
+  with small synthetic probes:
+  1. `validate_variant_inheritance` reported `valid: true` when some
+     clean/darkness/blur variants were missing, which breaks paired evaluation.
+  2. `validate_assigned_records` and `split_records` did not detect or prevent
+     the same image bytes (same `source_image_sha256`) appearing under two image
+     IDs or two CelebA identities in different splits.
+- Fix 1: `validate_variant_inheritance(base, variants, specs=None)` now reports
+  `missing_variants` (every base question must have every expected condition),
+  `inconsistent_corruption_specs` (one kind/severity_id used with different
+  values), and `undeclared_corruption_specs`. The `expand-variants` CLI passes
+  the declared specs, so a condition dropped for every question is also caught.
+- Fix 2: `split_records` merges groups that share a source-image checksum and
+  assigns the merged unit as one indivisible group; the unit's ordering key is
+  its smallest member group ID, so data without shared checksums keeps exactly
+  the previous assignment. `validate_assigned_records` now reports
+  `source_image_checksum_leakage`.
+- Added 9 synthetic-fixture tests (`tests/test_corruptions.py`,
+  `tests/test_splits.py`). Confirmed 8 of them fail on the previous code; the
+  ninth checks that assignments are unchanged when no checksums are shared.
+- Command: `PYTHONPATH=src python -m pytest -q` (Python 3.14 venv, macOS, CPU
+  only) → 40 passed. Implemented and unit-tested on synthetic data only; not run
+  on real POPE-COCO/CelebA files.
+- Not changed (open for team discussion): `CorruptionSpec.signature` differs for
+  `2` vs `2.0` and accepts `True`; Gaussian blur radius is in pixels, so one
+  radius is relatively stronger on CelebA (~178 px wide) than COCO (~640 px).
+- Next: run the split/leakage/completeness checks on the real manifests once the
+  authorized POPE-COCO and CelebA files are available.
+
 ## 2026-10-28 — M2 Python processing architecture
 
 - Added strict normalized record contracts for POPE-COCO and CelebA. POPE

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+from collections import defaultdict
 from dataclasses import asdict, dataclass
 from typing import Any, Iterable
 
@@ -110,10 +111,39 @@ def expand_variants(
 
 
 def validate_variant_inheritance(
-    base_records: Iterable[AssignedRecord], variants: Iterable[VariantRecord]
+    base_records: Iterable[AssignedRecord],
+    variants: Iterable[VariantRecord],
+    specs: Iterable[CorruptionSpec] | None = None,
 ) -> dict[str, Any]:
+    """Check split inheritance and that every question has every paired variant.
+
+    When ``specs`` is omitted, the expected conditions are those observed
+    anywhere in ``variants``; passing ``specs`` also catches a condition that
+    is missing for every question.
+    """
     base = {record.record.question_id: record for record in base_records}
     variants = list(variants)
+    observed_specs: dict[tuple[str, str], set[CorruptionSpec]] = defaultdict(set)
+    for variant in variants:
+        spec = variant.corruption
+        observed_specs[(spec.kind, spec.severity_id)].add(spec)
+    if specs is None:
+        expected = set(observed_specs)
+        declared: dict[tuple[str, str], CorruptionSpec] = {}
+    else:
+        declared = {(spec.kind, spec.severity_id): spec for spec in specs}
+        expected = set(declared)
+    # The same kind/severity_id must mean the same transform for every question.
+    inconsistent_specs = sorted(
+        f"{kind}::{severity_id}"
+        for (kind, severity_id), seen_specs in observed_specs.items()
+        if len(seen_specs) > 1
+        or ((kind, severity_id) in declared and seen_specs != {declared[(kind, severity_id)]})
+    )
+    undeclared_specs = sorted(
+        f"{kind}::{severity_id}" for kind, severity_id in set(observed_specs) - expected
+    )
+    present: dict[str, set[tuple[str, str]]] = defaultdict(set)
     unknown_questions: list[str] = []
     split_mismatches: list[str] = []
     group_mismatches: list[str] = []
@@ -125,6 +155,7 @@ def validate_variant_inheritance(
             duplicate_variant_ids.append(variant.variant_id)
         seen.add(variant.variant_id)
         question_id = variant.assigned.record.question_id
+        present[question_id].add((variant.corruption.kind, variant.corruption.severity_id))
         original = base.get(question_id)
         if original is None:
             unknown_questions.append(question_id)
@@ -135,6 +166,11 @@ def validate_variant_inheritance(
             group_mismatches.append(variant.variant_id)
         if original.record != variant.assigned.record:
             record_mismatches.append(variant.variant_id)
+    missing_variants = sorted(
+        f"{question_id}::{kind}::{severity_id}"
+        for question_id in base
+        for kind, severity_id in expected - present[question_id]
+    )
     report = {
         "base_record_count": len(base),
         "variant_count": len(variants),
@@ -143,6 +179,9 @@ def validate_variant_inheritance(
         "group_mismatches": sorted(set(group_mismatches)),
         "record_mismatches": sorted(set(record_mismatches)),
         "duplicate_variant_ids": sorted(set(duplicate_variant_ids)),
+        "missing_variants": missing_variants,
+        "inconsistent_corruption_specs": inconsistent_specs,
+        "undeclared_corruption_specs": undeclared_specs,
     }
     report["valid"] = (
         bool(variants)
@@ -151,5 +190,8 @@ def validate_variant_inheritance(
         and not group_mismatches
         and not record_mismatches
         and not duplicate_variant_ids
+        and not missing_variants
+        and not inconsistent_specs
+        and not undeclared_specs
     )
     return report

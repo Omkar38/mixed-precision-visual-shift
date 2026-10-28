@@ -79,6 +79,32 @@ def _group_counts(group_count: int, fractions: dict[str, float]) -> dict[str, in
     return counts
 
 
+def _checksum_linked_groups(records: list[NormalizedRecord]) -> dict[str, str]:
+    """Map each group to a representative so groups sharing image bytes stay together.
+
+    The same pixels can appear under two image IDs (or two CelebA identities).
+    Such groups are merged; the representative is the smallest member group ID,
+    so data without shared checksums keeps its original assignment.
+    """
+    parent = {record.group_id: record.group_id for record in records}
+
+    def find(group_id: str) -> str:
+        while parent[group_id] != group_id:
+            parent[group_id] = parent[parent[group_id]]
+            group_id = parent[group_id]
+        return group_id
+
+    first_group_by_checksum: dict[str, str] = {}
+    for record in records:
+        if record.source_image_sha256 is None:
+            continue
+        other = first_group_by_checksum.setdefault(record.source_image_sha256, record.group_id)
+        root, other_root = find(record.group_id), find(other)
+        if root != other_root:
+            parent[max(root, other_root)] = min(root, other_root)
+    return {group_id: find(group_id) for group_id in parent}
+
+
 def split_records(
     records: Iterable[NormalizedRecord], spec: SplitSpec
 ) -> dict[str, tuple[AssignedRecord, ...]]:
@@ -90,17 +116,19 @@ def split_records(
     if len(validation["datasets"]) != 1:
         raise ValueError("split one dataset at a time so its group ratios remain explicit")
     dataset = records[0].dataset
-    groups: dict[str, list[NormalizedRecord]] = defaultdict(list)
-    for record in records:
-        groups[record.group_id].append(record)
-    ordered_groups = sorted(groups, key=lambda group_id: _group_order(dataset, group_id, spec.seed))
-    counts = _group_counts(len(ordered_groups), spec.fractions)
-    group_splits: dict[str, str] = {}
+    representatives = _checksum_linked_groups(records)
+    units = sorted(set(representatives.values()))
+    ordered_units = sorted(units, key=lambda unit: _group_order(dataset, unit, spec.seed))
+    counts = _group_counts(len(ordered_units), spec.fractions)
+    unit_splits: dict[str, str] = {}
     offset = 0
     for split in SPLITS:
-        for group_id in ordered_groups[offset : offset + counts[split]]:
-            group_splits[group_id] = split
+        for unit in ordered_units[offset : offset + counts[split]]:
+            unit_splits[unit] = split
         offset += counts[split]
+    group_splits = {
+        group_id: unit_splits[unit] for group_id, unit in representatives.items()
+    }
     assigned = {split: [] for split in SPLITS}
     for record in sorted(records, key=lambda item: item.question_id):
         split = group_splits[record.group_id]
@@ -119,7 +147,8 @@ def validate_assigned_records(records: Iterable[AssignedRecord]) -> dict[str, An
     image_splits: dict[tuple[str, str], set[str]] = defaultdict(set)
     identity_splits: dict[str, set[str]] = defaultdict(set)
     group_splits: dict[tuple[str, str], set[str]] = defaultdict(set)
-    counts = {split: {"records": 0, "groups": set(), "labels": Counter()} for split in SPLITS}
+    checksum_splits: dict[str, set[str]] = defaultdict(set)
+    counts ={split: {"records": 0, "groups": set(), "labels": Counter()} for split in SPLITS}
     for assigned in records:
         record = assigned.record
         question_counts[record.question_id] += 1
@@ -128,6 +157,8 @@ def validate_assigned_records(records: Iterable[AssignedRecord]) -> dict[str, An
         group_splits[(record.dataset, record.group_id)].add(assigned.split)
         if record.dataset == "celeba":
             identity_splits[record.identity_id or ""].add(assigned.split)
+        if record.source_image_sha256 is not None:
+            checksum_splits[record.source_image_sha256].add(assigned.split)
         counts[assigned.split]["records"] += 1
         counts[assigned.split]["groups"].add(record.group_id)
         counts[assigned.split]["labels"][record.label] += 1
@@ -150,6 +181,9 @@ def validate_assigned_records(records: Iterable[AssignedRecord]) -> dict[str, An
         for (dataset, group_id), splits in group_splits.items()
         if len(splits) > 1
     )
+    checksum_leakage = sorted(
+        checksum for checksum, splits in checksum_splits.items() if len(splits) > 1
+    )
     report = {
         "record_count": len(records),
         "duplicate_question_ids": duplicate_question_ids,
@@ -157,6 +191,7 @@ def validate_assigned_records(records: Iterable[AssignedRecord]) -> dict[str, An
         "original_image_leakage": image_leakage,
         "celeba_identity_leakage": identity_leakage,
         "group_leakage": group_leakage,
+        "source_image_checksum_leakage": checksum_leakage,
         "splits": {
             split: {
                 "record_count": details["records"],
@@ -173,5 +208,6 @@ def validate_assigned_records(records: Iterable[AssignedRecord]) -> dict[str, An
         and not image_leakage
         and not identity_leakage
         and not group_leakage
+        and not checksum_leakage
     )
     return report

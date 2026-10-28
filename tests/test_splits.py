@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from mpvs.data.records import AssignedRecord, NormalizedRecord
 from mpvs.splits import SplitSpec, split_records, validate_assigned_records
 
@@ -115,3 +117,86 @@ def test_validator_rejects_duplicate_question_even_within_one_split():
     )
     assert report["valid"] is False
     assert report["duplicate_question_ids"] == [record.question_id]
+
+
+def _with_checksum(record, checksum):
+    return replace(record, source_image_sha256=checksum)
+
+
+def test_validator_detects_same_image_bytes_under_two_image_ids():
+    first, second = (
+        _with_checksum(record, "a" * 64)
+        for record in (_pope_records(image_count=2)[0], _pope_records(image_count=2)[2])
+    )
+    assert first.original_image_id != second.original_image_id
+    report = validate_assigned_records(
+        [AssignedRecord(first, "development"), AssignedRecord(second, "test")]
+    )
+    assert report["valid"] is False
+    assert report["source_image_checksum_leakage"] == ["a" * 64]
+    assert report["original_image_leakage"] == []
+    assert report["group_leakage"] == []
+
+
+def test_split_keeps_duplicate_image_bytes_together_for_every_seed():
+    records = [
+        _with_checksum(record, f"{record.original_image_id[-1]:0>64}")
+        for record in _pope_records(image_count=9)
+    ]
+    # image-7 is a byte-identical copy of image-2 under a different ID.
+    records = [
+        _with_checksum(record, "2".rjust(64, "0"))
+        if record.original_image_id == "image-7"
+        else record
+        for record in records
+    ]
+    spec_values = dict(pilot_fraction=0.2, development_fraction=0.4, test_fraction=0.4)
+    for seed in range(25):
+        result = split_records(records, SplitSpec(seed=seed, **spec_values))
+        assignment = {
+            assigned.record.original_image_id: assigned.split
+            for rows in result.values()
+            for assigned in rows
+        }
+        assert assignment["image-2"] == assignment["image-7"]
+        report = validate_assigned_records(item for rows in result.values() for item in rows)
+        assert report["valid"] is True
+
+
+def test_split_merges_celeba_identities_that_share_image_bytes():
+    records = [
+        NormalizedRecord(
+            dataset="celeba",
+            original_image_id=f"{identity}-{image}.jpg",
+            image_relpath=f"{identity}-{image}.jpg",
+            identity_id=str(identity),
+            question_id=f"q-{identity}-{image}",
+            question="Is this person smiling?",
+            label="yes" if image == 0 else "no",
+            attribute="Smiling",
+            source_image_sha256=("f" * 64 if (identity, image) in {(1, 0), (4, 1)}
+                                 else f"{identity}{image}".rjust(64, "0")),
+        )
+        for identity in range(6)
+        for image in range(2)
+    ]
+    for seed in range(25):
+        result = split_records(
+            records,
+            SplitSpec(seed=seed, pilot_fraction=0.2, development_fraction=0.4, test_fraction=0.4),
+        )
+        identity_split = {
+            assigned.record.identity_id: assigned.split
+            for rows in result.values()
+            for assigned in rows
+        }
+        assert identity_split["1"] == identity_split["4"]
+
+
+def test_split_without_shared_checksums_matches_plain_group_split():
+    plain = _pope_records()
+    hashed = [
+        _with_checksum(record, record.original_image_id[-1].rjust(64, "0")) for record in plain
+    ]
+    spec = SplitSpec(seed=17, pilot_fraction=0.2, development_fraction=0.4, test_fraction=0.4)
+    assert _assignment(split_records(plain, spec)) == _assignment(split_records(hashed, spec))

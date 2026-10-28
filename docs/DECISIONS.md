@@ -95,6 +95,25 @@ and sampling/balance rules remain proposed until real-data and pilot validation.
 Answerability decisions must be recorded for corrupted pilot variants using a
 model-independent review; model correctness and test accuracy are not inputs.
 
+## 2026-10-28 — Checksum-linked split groups and complete variant sets
+
+Date: 2026-10-28
+Decision: Treat groups that share a source-image SHA-256 as one indivisible
+split unit, and require every split question to carry every declared
+corruption condition before a variant manifest is accepted.
+Reason and evidence: The protocol requires splitting by original image (and by
+identity for CelebA) and paired evaluation. Synthetic probes showed identical
+image bytes under two IDs could land in different splits undetected, and a
+variant manifest missing some conditions still validated.
+Alternatives considered: Report duplicate-checksum leakage only and let the
+user fix inputs by hand; rejected because the split function can prevent it
+deterministically at no cost.
+Effect on comparability: None for data without shared checksums (assignments
+are identical). Manifests that contain duplicates may change assignment and
+must be regenerated.
+Protocol version/hash: Proposed, pending real-data validation.
+Owner: Gauri Chabukswar
+
 ## Template for a new decision
 
 Date:
