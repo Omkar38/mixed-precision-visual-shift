@@ -45,11 +45,27 @@ python3 scripts/preflight.py
 python3 scripts/preflight.py --output artifacts/preflight.json
 ```
 
-The `mpvs` CLI now lists and audits M1 candidates. CUDA NF4 construction is implemented but must be validated by the revised Colab audit before any mixed-precision configuration is called supported.
+The `mpvs` CLI lists and audits M1 candidates. The complete eight-candidate
+CUDA/NF4 grid was validated on a Tesla T4; see
+[the M1 findings](docs/M1_MAC_FINDINGS.md).
 
 ## Colab M1 component audit
 
-The [M1 Colab CUDA notebook](notebooks/m1_colab_cuda_nf4.ipynb) supports T4 and L4 runtimes. It runs each requested FP16/NF4 allocation from a fresh checkpoint process, audits realized modules and weight storage, performs one synthetic inference, and produces a grid summary. This is a feasibility audit, not an accuracy experiment. Publish `Kaushal-Commits` before opening the notebook so its clone step receives the current implementation.
+The [M1 Colab CUDA notebook](<notebooks/m1_colab_cuda_nf4 kaushal.ipynb>)
+contains the completed T4 audit. It ran each requested FP16/NF4 allocation from
+a fresh checkpoint process, audited realized modules and weight storage,
+performed one synthetic inference, and produced a grid summary. This is a
+feasibility audit, not an accuracy experiment.
+
+## M2 data pipeline
+
+The M2 Python pipeline normalizes an explicitly selected POPE-COCO variant or
+explicit CelebA attributes, verifies source images, creates deterministic
+image/identity-disjoint manifests, expands clean/darkness/Gaussian-blur
+variants, and validates model-independent pilot answerability decisions. See
+[the M2 pipeline handoff](docs/M2_PIPELINE.md). The implementation is validated
+with synthetic fixtures; actual dataset choices and severities remain pending
+real-data and pilot validation.
 
 ## Data and outputs
 

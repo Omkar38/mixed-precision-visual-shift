@@ -53,7 +53,7 @@ unit tests only. PyTorch is built with MPS support but reports MPS unavailable
 on this host, and CUDA/bitsandbytes are absent. NF4 candidates are explicitly
 unsupported here. FP16 load success is not inference or quantization evidence.
 
-## 2026-10-28 — Proposed CUDA NF4 audit policy
+## 2026-10-28 — Validated CUDA NF4 audit policy
 
 Use the installed Transformers 4.52.4 bitsandbytes loader for M1 candidate
 construction. For every candidate containing NF4, set quantization type to
@@ -61,14 +61,39 @@ NF4, FP16 compute, uint8 quantized storage, and double quantization disabled.
 Keep `lm_head` in FP16 as a documented output-head exception. Keep an entire
 component in FP16 by passing its verified module root in the loader's skip
 list; audit the realized module classes and parameter quantization state after
-loading rather than trusting that list.
+loading rather than trusting that list. The complete eight-candidate audit at
+commit `fdeea24367cf8f64fa9b5b8e9aea9de3beb5eafe` validated this behavior on a
+Tesla T4; detailed evidence is recorded in `docs/M1_MAC_FINDINGS.md`.
 
 Run each candidate in a fresh subprocess from the same pinned original
 checkpoint revision. A candidate is supported only if every supported linear
 module in each requested NF4 component is actually 4-bit, no requested FP16
 component is quantized, no unclassified module is quantized, and the synthetic
 inference succeeds. This policy is implemented and unit-tested but remains
-proposed until the T4 audit confirms the installed bitsandbytes behavior.
+validated by the T4 audit. This synthetic feasibility result does not establish
+task accuracy or freeze the final experimental memory caps.
+
+## 2026-10-28 — Proposed M2 processing architecture
+
+Normalize POPE-COCO and CelebA into one strict yes/no record contract. Require
+an explicit POPE variant and explicit CelebA attribute-to-question mappings;
+do not guess or merge source schemas. Store portable image-relative paths and
+verify source-image SHA-256 values for finalized manifests.
+
+Split one dataset at a time before creating corruptions. Use the original image
+as the POPE group and identity as the CelebA group. Order groups by a stable
+SHA-256 of dataset, group ID, and a recorded seed, then allocate whole groups
+to pilot/development/test. Manifests are canonical, checksummed, and immutable:
+an identical rerun is allowed, but different content requires a new path or
+protocol version.
+
+Implement darkness as a Pillow RGB brightness factor and Gaussian blur as a
+Pillow radius, currently before the model processor. Expand exactly one clean
+condition plus explicitly supplied corruption severities. Severity values,
+split fractions/seed, the transform stage, POPE variant, CelebA attributes,
+and sampling/balance rules remain proposed until real-data and pilot validation.
+Answerability decisions must be recorded for corrupted pilot variants using a
+model-independent review; model correctness and test accuracy are not inputs.
 
 ## Template for a new decision
 

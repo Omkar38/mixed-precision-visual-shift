@@ -9,22 +9,53 @@ Updated: 2026-10-28.
 - Added a dependency-free environment inventory script.
 - Created a local Git repository using Omkar's author and committer identity.
 - Published the repository at `https://github.com/Omkar38/mixed-precision-visual-shift`.
+- Completed the M1 CUDA/NF4 audit for all eight distinct component allocations
+  on a Tesla T4; the machine-readable summary reports acceptance.
 
 ## Not completed
 
-- Tested/pinned ML environment or verified 8GB GPU availability.
-- Dataset acquisition and split preparation.
-- Model loading, component quantization audit, or pilot.
+- Real-data POPE-COCO/CelebA schema and access validation.
+- Real-data split generation, balance review, and leakage validation.
+- Pilot selection of corruption severities, split sizes, and final memory caps.
 - Inference/evaluation implementation.
 - Experimental results or report figures.
 
 ## Current milestone
 
-M1 — model adapter and component-control audit (in progress).
+M2 — data and corruption pipeline (implementation complete on synthetic fixtures;
+real-data validation pending).
 
 ## Next task
 
-Publish the CUDA NF4 audit implementation, run the revised notebook on the Colab T4, download its JSON artifacts, and record which requested component allocations are actually realized. The highest-priority scientific risk remains actual independent quantization control of the vision encoder, connector, and language backbone.
+Gauri should validate the M2 loaders against authorized POPE-COCO and CelebA
+files, record source schemas/checksums/counts, propose explicit dataset choices,
+and run the group-leakage, determinism, balance, and pilot-answerability checks.
+Do not freeze severities or split sizes from synthetic fixtures.
+
+## 2026-10-28 — M2 Python processing architecture
+
+- Added strict normalized record contracts for POPE-COCO and CelebA. POPE
+  requires an explicit sampling variant and configurable verified source-field
+  names; CelebA requires official-style identity/attribute files and explicit
+  attribute questions.
+- Added source-image existence/SHA-256 verification, canonical JSONL encoding,
+  atomic writes, and immutable manifests that permit identical reruns but reject
+  replacement with different content. Normalization and variant sidecars bind
+  outputs to source annotation/base-manifest hashes and explicit settings.
+- Added deterministic group splitting from a recorded seed. POPE groups by
+  original image and CelebA by identity; the validation report includes
+  duplicate questions, original-image leakage, identity leakage, achieved
+  group/record counts, and yes/no balance.
+- Added deterministic Pillow darkness and Gaussian-blur transforms, explicit
+  corruption specifications, split/group-preserving variant expansion, and a
+  model-independent corrupted-pilot answerability decision contract.
+- Added CLI commands for normalization, splitting, leakage validation, variant
+  expansion, and answerability validation. Added `docs/M2_PIPELINE.md` as the
+  real-data validation handoff.
+- Validation: `conda run -n mpvs-m1 python -m pytest -q` passed 31 synthetic/unit
+  tests; Python compilation, CLI help, and Git whitespace checks passed. This is
+  implemented and synthetic-unit-tested, not real-data validated. No POPE-COCO
+  or CelebA source file was accessed and no severity was selected.
 
 ## 2026-10-28 — CUDA NF4 audit implementation
 
@@ -32,13 +63,13 @@ Publish the CUDA NF4 audit implementation, run the revised notebook on the Colab
 - Expanded the module audit to record linear/source classes, stored dtype, quantization type/state, compute dtype, double-quantization state, quantized storage dtype, known exceptions, mismatched modules, and unclassified quantized modules. Requested loader settings do not count as validation; `matches_request` comes from the realized modules.
 - Expanded memory accounting to include unique tensor storage reachable from bitsandbytes parameter `quant_state` metadata without double-counting parameter or buffer storage.
 - Added isolated grid summarization: successful inference candidates are deduplicated by effective signature, sorted by measured total weight storage, and used to enumerate caps admitting at least two distinct configurations.
-- Reworked `notebooks/m1_colab_cuda_nf4.ipynb` to install the project, run FP16/uniform-NF4/language-NF4 as the feasibility gate, run all eight candidates in fresh subprocesses, preserve failure JSON, summarize M1 acceptance, and download a zip of the ignored artifacts.
+- Reworked `notebooks/m1_colab_cuda_nf4 kaushal.ipynb` to install the project, run FP16/uniform-NF4/language-NF4 as the feasibility gate, run all eight candidates in fresh subprocesses, preserve failure JSON, summarize M1 acceptance, and download a zip of the ignored artifacts.
 - Validation on the Mac development environment: `conda run -n mpvs-m1 python -m pytest -q` passed 14 tests; notebook JSON, Python compilation, wheel construction, unsupported-candidate JSON, and Git whitespace checks passed. This is implemented and unit-tested, not GPU-tested. M1 acceptance remains unmet until the T4 outputs confirm at least two distinct feasible candidates at a measured cap.
 - First revised-notebook attempt on a T4 checked out the still-published commit `8d9fee5` and stopped at `pip install -e .` because that revision predates the uncommitted `pyproject.toml` and M1 implementation. This was a publication/infrastructure failure and produced no NF4 evidence. The clone cell now fails early with a clear stale-branch diagnostic when required project files are absent.
 
 ## 2026-10-22 — Gauri CUDA smoke-test contribution (historical; superseded below)
 
-- Created `notebooks/m1_colab_cuda_nf4.ipynb` on `Gauri-Commits`, branched from Omkar's `main`.
+- Created `notebooks/m1_colab_cuda_nf4 gauri.ipynb` on `Gauri-Commits`, branched from Omkar's `main`.
 - The notebook checks for an L4, clones this branch, installs CUDA-side Python dependencies including bitsandbytes while retaining Colab's CUDA-enabled PyTorch, runs `scripts/preflight.py`, loads the pinned FP16 checkpoint, runs one synthetic inference, and records separate peak allocated/reserved GPU memory for loading and generation.
 - The notebook does not construct an NF4 model or claim GPU validation. It must be run on a Colab L4 after the branch is published; no Colab/GPU run has been performed yet.
 - Next: publish `Gauri-Commits`, run the notebook on an L4, and retain the generated preflight and smoke-test JSON artifacts outside tracked files.
@@ -62,7 +93,7 @@ Commands also run: `conda create -n mpvs-m1 python=3.11 pip -y`; dependency inst
 - Added `docs/MIDTERM_M0_M2.md`, scoped to M0–M2 as agreed by the team: environment setup (Mac dev environment from `Kaushal-Commits`, Colab L4 environment from this branch), a proposed end-to-end flowchart and M1 audit-gate flowchart, the questions M1 validation will answer and how each outcome changes the plan, the proposed M2 data/corruption pipeline with the leakage and determinism checks to be written, and a risk table covering compute, Colab limits, library compatibility, data access, and schedule.
 - Every figure is labelled measured, implemented-not-run, estimated, or proposed. The per-config memory table is Omkar's estimate from `docs/project-deep-dive`; only the FP16 total (4,493,569,888 bytes) is measured (Kaushal, Mac CPU load).
 - Documentation only. No code, model download, GPU run, dataset access, or experiment was performed. The Colab notebook has still not been run.
-- Next: run `notebooks/m1_colab_cuda_nf4.ipynb` on an L4 and record its measurements here; then write the M2 synthetic-fixture leakage tests.
+- Next: run `notebooks/m1_colab_cuda_nf4 gauri.ipynb` on an L4 and record its measurements here; then write the M2 synthetic-fixture leakage tests.
 
 ## 2026-10-27 — Gauri first GPU run: FP16 smoke test on Colab T4
 

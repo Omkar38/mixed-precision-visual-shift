@@ -1,4 +1,4 @@
-"""Command-line interface for M1 candidate listing and model audits."""
+"""Command-line interface for the MPVS model audit and data pipeline."""
 
 from __future__ import annotations
 
@@ -154,6 +154,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     summary_parser.add_argument("inputs", nargs="+", type=Path)
     summary_parser.add_argument("--output", type=Path)
+    from mpvs.data.cli import add_m2_parsers
+
+    add_m2_parsers(subparsers)
     return parser
 
 
@@ -233,6 +236,10 @@ def main() -> int:
         return 0
     if args.command == "summarize":
         return summarize(args)
+    if args.command.startswith("m2-"):
+        from mpvs.data.cli import run_m2
+
+        return run_m2(args)
     return audit(args)
 
 

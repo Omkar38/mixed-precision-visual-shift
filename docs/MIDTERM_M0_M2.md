@@ -72,7 +72,7 @@ python scripts/preflight.py --output artifacts/preflight-macos-m1.json
 
 ### Reproducing the experiment environment
 
-Open [`notebooks/m1_colab_cuda_nf4.ipynb`](../notebooks/m1_colab_cuda_nf4.ipynb)
+Open [`notebooks/m1_colab_cuda_nf4 gauri.ipynb`](<../notebooks/m1_colab_cuda_nf4 gauri.ipynb>)
 in Colab, select **Runtime → Change runtime type → T4 GPU** (free) or **L4 GPU**, and run all cells.
 The notebook:
 

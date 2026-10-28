@@ -113,7 +113,7 @@ the validation evidence.
 - [cli.py](../src/mpvs/cli.py) writes atomic machine-readable candidate audits,
   distinguishes unsupported/load/audit/inference failures, and summarizes the
   isolated grid.
-- [m1_colab_cuda_nf4.ipynb](../notebooks/m1_colab_cuda_nf4.ipynb) installs the
+- [m1_colab_cuda_nf4 kaushal.ipynb](<../notebooks/m1_colab_cuda_nf4 kaushal.ipynb>) installs the
   validated CUDA-side versions, runs each candidate in a fresh subprocess, and
   packages the generated audit artifacts.
 - [test_quantization.py](../tests/test_quantization.py),
@@ -343,7 +343,7 @@ python -m mpvs.cli audit \
 ```
 
 The reproducible complete-grid entry point is
-[m1_colab_cuda_nf4.ipynb](../notebooks/m1_colab_cuda_nf4.ipynb). It records the
+[m1_colab_cuda_nf4 kaushal.ipynb](<../notebooks/m1_colab_cuda_nf4 kaushal.ipynb>). It records the
 repository commit, environment, immutable model revisions, per-candidate audit,
 and summary before packaging the ignored artifacts.
 
