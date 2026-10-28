@@ -1,6 +1,6 @@
 # Current status
 
-Updated: 2026-10-16.
+Updated: 2026-10-28.
 
 ## Completed
 
@@ -24,9 +24,19 @@ M1 — model adapter and component-control audit (in progress).
 
 ## Next task
 
-Move the M1 code to the NVIDIA experiment host, validate a CUDA environment with bitsandbytes, then implement and audit fresh-checkpoint NF4 replacement for each requested component. The highest-priority scientific risk remains actual independent quantization control of the vision encoder, connector, and language backbone.
+Publish the CUDA NF4 audit implementation, run the revised notebook on the Colab T4, download its JSON artifacts, and record which requested component allocations are actually realized. The highest-priority scientific risk remains actual independent quantization control of the vision encoder, connector, and language backbone.
 
-## 2026-10-22 — Gauri CUDA smoke-test contribution
+## 2026-10-28 — CUDA NF4 audit implementation
+
+- Implemented a CUDA-only fresh-checkpoint candidate loader using the Transformers 4.52.4 bitsandbytes path. Candidate policy is NF4 storage, FP16 compute, uint8 quantized storage, no double quantization, explicit FP16 component-root exclusions, and an explicit FP16 `lm_head` exception.
+- Expanded the module audit to record linear/source classes, stored dtype, quantization type/state, compute dtype, double-quantization state, quantized storage dtype, known exceptions, mismatched modules, and unclassified quantized modules. Requested loader settings do not count as validation; `matches_request` comes from the realized modules.
+- Expanded memory accounting to include unique tensor storage reachable from bitsandbytes parameter `quant_state` metadata without double-counting parameter or buffer storage.
+- Added isolated grid summarization: successful inference candidates are deduplicated by effective signature, sorted by measured total weight storage, and used to enumerate caps admitting at least two distinct configurations.
+- Reworked `notebooks/m1_colab_cuda_nf4.ipynb` to install the project, run FP16/uniform-NF4/language-NF4 as the feasibility gate, run all eight candidates in fresh subprocesses, preserve failure JSON, summarize M1 acceptance, and download a zip of the ignored artifacts.
+- Validation on the Mac development environment: `conda run -n mpvs-m1 python -m pytest -q` passed 14 tests; notebook JSON, Python compilation, wheel construction, unsupported-candidate JSON, and Git whitespace checks passed. This is implemented and unit-tested, not GPU-tested. M1 acceptance remains unmet until the T4 outputs confirm at least two distinct feasible candidates at a measured cap.
+- First revised-notebook attempt on a T4 checked out the still-published commit `8d9fee5` and stopped at `pip install -e .` because that revision predates the uncommitted `pyproject.toml` and M1 implementation. This was a publication/infrastructure failure and produced no NF4 evidence. The clone cell now fails early with a clear stale-branch diagnostic when required project files are absent.
+
+## 2026-10-22 — Gauri CUDA smoke-test contribution (historical; superseded below)
 
 - Created `notebooks/m1_colab_cuda_nf4.ipynb` on `Gauri-Commits`, branched from Omkar's `main`.
 - The notebook checks for an L4, clones this branch, installs CUDA-side Python dependencies including bitsandbytes while retaining Colab's CUDA-enabled PyTorch, runs `scripts/preflight.py`, loads the pinned FP16 checkpoint, runs one synthetic inference, and records separate peak allocated/reserved GPU memory for loading and generation.

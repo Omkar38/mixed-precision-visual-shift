@@ -2,7 +2,9 @@
 
 The current vertical slice inventories the immutable SmolVLM2 checkpoint, its
 vision/connector/language module mapping, stored tensor dtypes, and unique
-weight storage. It does not yet implement or validate bitsandbytes NF4.
+weight storage. CUDA bitsandbytes NF4 construction is implemented, but no NF4
+candidate is considered supported until the Colab module audit and inference
+complete successfully.
 
 ```bash
 conda env create -f environment-macos.yml
@@ -16,9 +18,9 @@ mpvs audit \
 ```
 
 Add `--smoke-inference` only on a host with a validated execution backend.
-NF4 requests exit nonzero with a structured `unsupported` record until the
-separate CUDA/bitsandbytes implementation is audited. Generated audits and
-model caches are intentionally ignored.
+NF4 requests on a non-CUDA host exit nonzero with a structured `unsupported`
+record. Generated audits and model caches are intentionally ignored. Use the
+Colab notebook for isolated CUDA candidate construction and grid summarization.
 `requirements-macos-lock.txt` is the complete tested package inventory;
 `environment-macos.yml` is the environment creation entry point.
 The editable install makes `mpvs` importable without setting `PYTHONPATH`.

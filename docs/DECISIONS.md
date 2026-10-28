@@ -53,6 +53,23 @@ unit tests only. PyTorch is built with MPS support but reports MPS unavailable
 on this host, and CUDA/bitsandbytes are absent. NF4 candidates are explicitly
 unsupported here. FP16 load success is not inference or quantization evidence.
 
+## 2026-10-28 — Proposed CUDA NF4 audit policy
+
+Use the installed Transformers 4.52.4 bitsandbytes loader for M1 candidate
+construction. For every candidate containing NF4, set quantization type to
+NF4, FP16 compute, uint8 quantized storage, and double quantization disabled.
+Keep `lm_head` in FP16 as a documented output-head exception. Keep an entire
+component in FP16 by passing its verified module root in the loader's skip
+list; audit the realized module classes and parameter quantization state after
+loading rather than trusting that list.
+
+Run each candidate in a fresh subprocess from the same pinned original
+checkpoint revision. A candidate is supported only if every supported linear
+module in each requested NF4 component is actually 4-bit, no requested FP16
+component is quantized, no unclassified module is quantized, and the synthetic
+inference succeeds. This policy is implemented and unit-tested but remains
+proposed until the T4 audit confirms the installed bitsandbytes behavior.
+
 ## Template for a new decision
 
 Date:

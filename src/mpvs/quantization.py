@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 from dataclasses import asdict, dataclass
 from itertools import product
@@ -10,6 +11,12 @@ from typing import Any, Iterable
 
 PRECISIONS = ("fp16", "nf4")
 COMPONENTS = ("vision", "connector", "language")
+COMPONENT_ROOTS = {
+    "vision": "model.vision_model",
+    "connector": "model.connector",
+    "language": "model.text_model",
+}
+PRESERVED_LINEAR_EXCEPTIONS = {"lm_head": "output_head_preserved_fp16"}
 
 
 @dataclass(frozen=True)
@@ -49,9 +56,9 @@ def candidate_by_id(candidate_id: str) -> PrecisionCandidate:
 
 def classify_component(module_path: str) -> str | None:
     mappings = (
-        ("model.vision_model", "vision"),
-        ("model.connector", "connector"),
-        ("model.text_model", "language"),
+        (COMPONENT_ROOTS["vision"], "vision"),
+        (COMPONENT_ROOTS["connector"], "connector"),
+        (COMPONENT_ROOTS["language"], "language"),
         ("lm_head", "language"),
     )
     for prefix, component in mappings:
@@ -70,19 +77,42 @@ def module_quantization_state(name: str, module: Any) -> dict[str, Any]:
         or hasattr(module, "quant_state")
     )
     quant_type = None
+    double_quant = None
+    quant_storage_dtype = None
     for _parameter_name, parameter in parameters:
         state = getattr(parameter, "quant_state", None)
         if state is not None:
             quant_type = getattr(state, "quant_type", None) or "present"
+            nested = getattr(state, "state2", None)
+            double_quant = nested is not None
+            quant_storage_dtype = str(parameter.dtype).removeprefix("torch.")
             break
+    source_class = getattr(module, "source_cls", None)
+    source_class_name = (
+        f"{source_class.__module__}.{source_class.__qualname__}"
+        if source_class is not None
+        else None
+    )
+    linear_module = class_name.endswith(".Linear") or "linear4bit" in class_name.lower()
+    exception = PRESERVED_LINEAR_EXCEPTIONS.get(name)
     return {
         "name": name,
         "component": classify_component(name),
         "class": class_name,
         "direct_parameter_count": sum(p.numel() for _, p in parameters),
         "stored_dtypes": dtypes,
+        "linear_module": linear_module,
+        "source_class": source_class_name,
+        "quantization_exception": exception,
         "quantized_4bit": quantized,
         "quant_type": quant_type,
+        "compute_dtype": (
+            str(getattr(module, "compute_dtype")).removeprefix("torch.")
+            if getattr(module, "compute_dtype", None) is not None
+            else None
+        ),
+        "double_quant": double_quant,
+        "quant_storage_dtype": quant_storage_dtype,
     }
 
 
@@ -102,7 +132,9 @@ def allocation_coverage(
     for component in COMPONENTS:
         component_records = [record for record in records if record["component"] == component]
         quantizable = [
-            record for record in component_records if record["class"].endswith(".Linear")
+            record
+            for record in component_records
+            if record["linear_module"] and record["quantization_exception"] is None
         ]
         quantized = [record for record in quantizable if record["quantized_4bit"]]
         requested = getattr(candidate, component)
@@ -120,20 +152,50 @@ def allocation_coverage(
             "parameterized_modules": len(component_records),
             "linear_modules": len(quantizable),
             "quantized_4bit_linear_modules": len(quantized),
+            "mismatched_modules": [
+                record["name"]
+                for record in quantizable
+                if (requested == "nf4") != record["quantized_4bit"]
+            ],
+            "preserved_exceptions": [
+                {"name": record["name"], "reason": record["quantization_exception"]}
+                for record in component_records
+                if record["quantization_exception"] is not None
+            ],
         }
-    return {
+    unclassified_quantized = [
+        record["name"]
+        for record in records
+        if record["component"] is None and record["quantized_4bit"]
+    ]
+    result = {
         "components": components,
         "unclassified_parameterized_modules": [
             record["name"] for record in records if record["component"] is None
         ],
+        "unclassified_quantized_modules": unclassified_quantized,
     }
+    result["matches_request"] = not unclassified_quantized and all(
+        not details["mismatched_modules"] for details in components.values()
+    )
+    return result
 
 
 def effective_signature(records: Iterable[dict[str, Any]]) -> str:
     effective = [
         {
             key: record.get(key)
-            for key in ("name", "component", "class", "stored_dtypes", "quantized_4bit", "quant_type")
+            for key in (
+                "name",
+                "component",
+                "class",
+                "stored_dtypes",
+                "quantized_4bit",
+                "quant_type",
+                "compute_dtype",
+                "double_quant",
+                "quant_storage_dtype",
+            )
         }
         for record in records
     ]
@@ -141,10 +203,54 @@ def effective_signature(records: Iterable[dict[str, Any]]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def unsupported_reason(candidate: PrecisionCandidate, device: str) -> str | None:
-    if candidate.requires_nf4:
-        return (
-            "NF4 construction is not implemented in the Mac M1 slice; "
-            "it requires a separate bitsandbytes audit on an NVIDIA/CUDA host"
-        )
+def unsupported_reason(
+    candidate: PrecisionCandidate,
+    device: str,
+    *,
+    bitsandbytes_available: bool | None = None,
+) -> str | None:
+    if not candidate.requires_nf4:
+        return None
+    if not device.startswith("cuda"):
+        return "NF4 candidates require an NVIDIA/CUDA device"
+    if bitsandbytes_available is None:
+        bitsandbytes_available = importlib.util.find_spec("bitsandbytes") is not None
+    if not bitsandbytes_available:
+        return "NF4 candidates require bitsandbytes"
     return None
+
+
+def nf4_policy(candidate: PrecisionCandidate) -> dict[str, Any]:
+    """Return the fixed M1 NF4 policy and component roots kept in FP16."""
+    skipped = ["lm_head"] + [
+        root
+        for component, root in COMPONENT_ROOTS.items()
+        if getattr(candidate, component) == "fp16"
+    ]
+    return {
+        "quant_type": "nf4",
+        "compute_dtype": "float16",
+        "double_quant": False,
+        "quant_storage_dtype": "uint8",
+        "modules_to_not_convert": skipped,
+        "preserved_exceptions": PRESERVED_LINEAR_EXCEPTIONS,
+    }
+
+
+def bitsandbytes_config(candidate: PrecisionCandidate) -> Any:
+    """Build the Transformers 4-bit loader config for one requested candidate."""
+    if not candidate.requires_nf4:
+        return None
+    import torch
+    from transformers import BitsAndBytesConfig
+
+    policy = nf4_policy(candidate)
+    return BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type=policy["quant_type"],
+        bnb_4bit_compute_dtype=torch.float16,
+        bnb_4bit_use_double_quant=policy["double_quant"],
+        bnb_4bit_quant_storage=torch.uint8,
+        # Transformers 4.52.4 uses this skip list for both its 8-bit and 4-bit quantizers.
+        llm_int8_skip_modules=policy["modules_to_not_convert"],
+    )

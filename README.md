@@ -45,11 +45,11 @@ python3 scripts/preflight.py
 python3 scripts/preflight.py --output artifacts/preflight.json
 ```
 
-There is no inference command yet. M0 will establish a tested dependency environment; M1 will establish which precision configurations are real.
+The `mpvs` CLI now lists and audits M1 candidates. CUDA NF4 construction is implemented but must be validated by the revised Colab audit before any mixed-precision configuration is called supported.
 
-## Colab FP16 smoke test
+## Colab M1 component audit
 
-The [M1 Colab CUDA notebook](notebooks/m1_colab_cuda_nf4.ipynb) is a narrow FP16 smoke test for an L4 runtime. It runs preflight, loads the pinned model, performs one synthetic inference, and records peak GPU memory. It does not implement NF4 or count as a completed experiment. Publish the `Gauri-Commits` branch before opening the notebook in Colab so its clone step can find the branch.
+The [M1 Colab CUDA notebook](notebooks/m1_colab_cuda_nf4.ipynb) supports T4 and L4 runtimes. It runs each requested FP16/NF4 allocation from a fresh checkpoint process, audits realized modules and weight storage, performs one synthetic inference, and produces a grid summary. This is a feasibility audit, not an accuracy experiment. Publish `Kaushal-Commits` before opening the notebook so its clone step receives the current implementation.
 
 ## Data and outputs
 
