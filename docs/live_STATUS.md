@@ -32,6 +32,35 @@ files, record source schemas/checksums/counts, propose explicit dataset choices,
 and run the group-leakage, determinism, balance, and pilot-answerability checks.
 Do not freeze severities or split sizes from synthetic fixtures.
 
+## 2026-10-28 — Gauri M2 real-data validation, Phase A
+
+- Followed Kaushal's M2 handoff runbook. Full report:
+  [M2_REAL_DATA_VALIDATION.md](M2_REAL_DATA_VALIDATION.md).
+- POPE-COCO (validated on real data): downloaded the three official POPE COCO
+  files and the 500 referenced COCO val2014 images. All variants have 3000
+  questions, 500 images, 1500/1500 yes/no, 6 questions per image, no duplicate
+  IDs or missing images; the loader defaults matched the schema with no code
+  change. Normalization is deterministic.
+- CelebA (annotations validated on real data, images not downloaded): the
+  official attribute and identity files match the published MD5 values; 202,599
+  images, 40 attributes, 10,177 identities, every image has an identity. 615
+  identities have mixed Male labels (dataset label noise).
+- Trial splits (placeholder seed 590) on POPE adversarial and CelebA
+  Eyeglasses: zero leakage, byte-identical on rerun. Trial POPE pilot
+  corruptions: 420 variants, completeness valid, 0 pixel mismatches across two
+  renders.
+- Added `scripts/m2_pilot_review.py`, which renders pilot variants, checks pixel
+  determinism, and writes a local review page that exports decisions for
+  `m2-validate-answerability`.
+- Proposed (awaiting team): POPE `adversarial`; CelebA Eyeglasses /
+  Wearing_Hat / Smiling; a per-attribute, identity-capped balanced sampling
+  rule; split sizes and seed. Nothing is frozen.
+- Not done: CelebA image download, final manifests (Phase B), human
+  answerability review (Phase C).
+- Next: the team decides the items in section 5 of the report; then implement
+  the approved CelebA sampling rule, create final manifests, and run the pilot
+  answerability review.
+
 ## 2026-10-28 — Gauri M2 review: paired-variant completeness and duplicate-image leakage
 
 - Reviewed `src/mpvs/splits.py` and `src/mpvs/corruptions.py` on `Kaushal-Commits`
