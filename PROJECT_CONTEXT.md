@@ -12,6 +12,13 @@ We are not training a new model, creating an image-restoration system, or invent
 
 This handoff is based on the Final tab of the CSE590 proposal, read on 2026-10-05. See `docs/PROPOSAL_SNAPSHOT.md`. No professor approval or experimental outcome is established by this repository.
 
+**Current state (2026-10-29).** M0 and M1 are complete and M2 is implemented.
+The component-control audit has been measured on an NVIDIA T4, so the sections
+below that once described the architecture as undiscovered now record measured
+values. **No accuracy experiment has run**: there is no pilot, no evaluation on
+real images, and no Δ. For live status see `docs/live_STATUS.md`; for the
+measured results see `docs/MIDTERM_M0_M2.md` and `docs/M1_MAC_FINDINGS.md`.
+
 ## 2. A concrete example
 
 Suppose a clear photo contains a dog. The question is “Is there a dog in the image?” and the label is “yes.”
@@ -32,7 +39,28 @@ Primary checkpoint: `HuggingFaceTB/SmolVLM2-2.2B-Instruct`.
 | Connector | Maps visual representations into the language model's representation space | FP16 or NF4 for supported linear layers |
 | Language backbone | Processes the question and visual representations to generate an answer | FP16 or NF4 for supported linear layers |
 
-There are at most 2 × 2 × 2 = 8 requested combinations. The exact module paths and coverage must be discovered from the installed checkpoint and library implementation.
+There are at most 2 × 2 × 2 = 8 requested combinations. The module paths and
+coverage have now been **measured** from the pinned checkpoint at revision
+`482adb537c021c86670beed01cd58990d01e72e4`:
+
+| Component | Verified module root | Supported linear modules |
+| --- | --- | ---: |
+| Vision encoder | `model.vision_model` | 162 |
+| Connector | `model.connector` | 1 |
+| Language backbone | `model.text_model` | 168 |
+| Preserved output head | `lm_head` | FP16 exception for every candidate |
+
+All eight combinations were constructed from the original checkpoint, matched
+their requested allocation with no mismatched or unclassified modules, produced
+eight distinct effective signatures, and completed one synthetic inference. The
+measured weight storage ranges from 1,556,898,080 bytes (all NF4) to
+4,493,569,888 bytes (all FP16), and the per-component savings are exactly
+additive. Independent component control is therefore established, not assumed.
+
+Note the structural consequence: the connector holds 0.9% of the weights and is
+a **single** linear module. Its precision is nearly free in memory terms, so a
+null connector result cannot distinguish "no effect" from "one layer is too
+small a lever."
 
 “NF4 component” does not mean every tensor is four bits. Embeddings, normalizations, biases, output heads, convolutions, or unsupported layers may remain at higher precision. Record every exception and measure its storage. Global quantization flags alone do not prove independent control of the three components.
 
@@ -76,8 +104,8 @@ For both datasets, check answerability without conditioning inclusion on model c
 
 ## 6. Processing pipeline
 
-1. Verify hardware, dependency compatibility, dataset availability, and checkpoint access.
-2. Audit model components and independently controllable quantization; reject unsupported or duplicate effective configurations.
+1. Verify hardware, dependency compatibility, dataset availability, and checkpoint access. **Done.**
+2. Audit model components and independently controllable quantization; reject unsupported or duplicate effective configurations. **Done; all eight candidates supported and distinct.**
 3. Create immutable group-disjoint split manifests.
 4. Apply darkness and Gaussian blur at three pilot-checked severities each, plus clean images: up to seven conditions.
 5. Evaluate each supported configuration on development and test conditions using fixed prompts, resolution, decoding, and parsing. Cache raw answers and parsed outcomes.
@@ -119,7 +147,18 @@ Compare against uniform supported-layer NF4 and FP16. Show intrinsic FP16 degrad
 
 ## 9. Feasibility and outputs
 
-The proposal assumes an available 8GB GPU; its actual model and software support are not yet verified. Begin with a disjoint 100-question pilot, one configuration at a time.
+The proposal's 8 GB GPU assumption is now **supported by measurement**: the
+largest configuration peaked at 4.957 GiB reserved on a T4 with one 384×384
+synthetic image, batch size 1, and four generated tokens. That is not proof the
+pilot or full evaluation fits unchanged, because real images may expand into
+more image tokens. Begin with a disjoint 100-question pilot, one configuration
+at a time.
+
+The unmeasured quantity that decides affordability is **steady-state
+throughput**. The only figures available are cold single calls of 3.78 to 4.05
+seconds per answer, which include load and warm-up. Depending on where steady
+state lands, the full design costs roughly 26 to 106 GPU-hours. Measuring this
+is the pilot's first task, ahead of severity selection.
 
 The proposal's illustrative test workload is 2 domains × 500 questions × 8 configurations × 7 conditions = **56,000 generated answers**, excluding development and pilot runs. Actual split sizes must respect whole image/identity groups; 500 is a planning estimate, not permission to split a group.
 
@@ -150,9 +189,26 @@ Expected deliverables:
 | December 10 | Final report, code, and presentation |
 
 These dates are copied from the proposal, not newly verified course deadlines.
+As of 2026-10-29 the October 12 and October 19 dates have passed: the protocol
+is not frozen and the main runs have not started. M1 and M2 completed instead,
+so the critical path is now the pilot rather than infrastructure.
 
 ## 11. Decisions still requiring pilot evidence
 
-Exact library versions and model revision; usable GPU; module mapping; supported candidate set; actual storage measurements; POPE variant; selected CelebA attributes; group split sizes; severity parameters; image resolution and prompt; parsing rule; development mixture construction; memory caps; bootstrap settings; and fallback necessity.
+**Resolved by measurement.** Library versions and the pinned model/processor
+revision; a usable GPU; the component module mapping; the supported candidate
+set (all eight); actual weight-storage measurements including quantization
+metadata; and the feasible memory caps. No fallback model or quantizer is
+needed. POPE-COCO schema and counts are validated against the official files.
 
-The example configuration makes these gaps visible. The first agent should resolve them through small verified steps and a decision log, not fill them with invented “final” values.
+**Still open, and each must be settled before the protocol is frozen.** Whether
+NF4 double quantization is on or off, since it shifts every measured cap.
+Whether blur severity is defined in absolute pixels or relative to image size,
+since a Pillow radius is far stronger on a ~178 px CelebA crop than on a ~640 px
+COCO image. Which measured caps are primary. Steady-state throughput. The POPE
+sampling variant; the CelebA attribute set and balanced sampling rule; group
+split sizes and seed; severity parameters; image resolution and prompt; the
+parsing rule; development mixture construction; and bootstrap settings.
+
+These gaps must be resolved through small verified steps and the decision log,
+not filled with invented “final” values. See `docs/DECISIONS.md`.

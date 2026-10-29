@@ -241,6 +241,32 @@ Commands also run: `conda create -n mpvs-m1 python=3.11 pip -y`; dependency inst
 - Not done: still no dataset download beyond POPE, no CelebA images, no pilot,
   no inference on real data, no accuracy figure, nothing frozen.
 
+## 2026-10-29 — Context and README brought up to date
+
+- Updated [PROJECT_CONTEXT.md](../PROJECT_CONTEXT.md), which still described the
+  architecture as undiscovered and the 8 GB assumption as unverified. Section 3
+  now records the measured module roots and the 162/1/168 supported-linear
+  counts; section 6 marks the verification and audit steps done; section 9
+  records the measured 4.957 GiB peak for the largest configuration and the
+  unmeasured throughput that decides affordability; section 11 is split into
+  decisions resolved by measurement and decisions still open. Added a
+  current-state pointer near the top and a note that the October 12 and 19
+  proposal dates have passed.
+- Rewrote [README.md](../README.md) around the current state. It now leads with
+  the research question and the Δ definition, carries a milestone table, states
+  plainly that there is no accuracy result, summarizes what M1 established with
+  the measured storage table, lists validated hardware and software, and
+  enumerates the four open decisions.
+- Corrected a false claim written into the README during the rewrite: it
+  referenced an `mpvs-data` entry point, which does not exist. `pyproject.toml`
+  defines one console script, `mpvs`, and the data pipeline is reached through
+  its `m2-*` subcommands. The README now lists the nine real subcommands as
+  reported by `mpvs --help`.
+- Command: `PYTHONPATH=src python3 -m pytest -q` → **42 passed**. All local
+  Markdown links resolve; the tracked-file identity scan is clean.
+- Not done: no dataset download beyond POPE, no CelebA images, no pilot, no
+  inference on real data, no accuracy figure, nothing frozen.
+
 ## Handoff rule
 
 Every coding session should append what changed, exact validation commands and outcomes, unresolved issues, and the next task. Do not mark GPU-tested or experiment-completed based on synthetic/unit tests.
