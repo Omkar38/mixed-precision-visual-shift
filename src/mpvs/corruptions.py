@@ -27,6 +27,11 @@ class CorruptionSpec:
             raise ValueError(f"corruption kind must be one of {CORRUPTIONS}")
         if not self.severity_id.strip():
             raise ValueError("severity_id must be non-empty")
+        if isinstance(self.value, bool):
+            raise ValueError("value must be a real number, not a boolean")
+        if self.value is not None and isinstance(self.value, int):
+            # Normalize 2 to 2.0 so one transform has exactly one signature.
+            object.__setattr__(self, "value", float(self.value))
         if self.kind == "clean":
             if self.value is not None:
                 raise ValueError("clean corruption must have a null value")

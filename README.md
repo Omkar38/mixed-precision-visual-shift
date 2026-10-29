@@ -1,6 +1,6 @@
 # Mixed Precision Allocation Under Visual Distribution Shift
 
-CSE590-01, Fall 2026 — Gauri Chabukswar, Omkar Lashkare, and Kaushal Satish Shelke.
+CSE590-01, Fall 2026. Three-person team project.
 
 **Question:** Under the same model-weight memory limit, do compression settings selected using clear images still work well on darker or blurrier images?
 
@@ -15,7 +15,7 @@ CSE590-01, Fall 2026 — Gauri Chabukswar, Omkar Lashkare, and Kaushal Satish Sh
 
 Open this repository folder in Claude Code or Codex. Claude's entry file imports the shared agent instructions; Codex uses `AGENTS.md`. Give either agent this prompt:
 
-> Read AGENTS.md, PROJECT_CONTEXT.md, docs/IMPLEMENTATION_PLAN.md, and docs/live_STATUS.md. Start with M0 and then implement M1. Verify the environment, inspect the actual model architecture, and build the component-level quantization audit. Do not assume all eight precision configurations work. Use small, reviewable changes and report what you actually ran. Keep the current research question and evaluation protocol. For commits made on my behalf, use the Git identity in docs/GIT_WORKFLOW.md, with no AI co-author trailer.
+> Read AGENTS.md, PROJECT_CONTEXT.md, docs/IMPLEMENTATION_PLAN.md, and docs/live_STATUS.md. Start with M0 and then implement M1. Verify the environment, inspect the actual model architecture, and build the component-level quantization audit. Do not assume all eight precision configurations work. Use small, reviewable changes and report what you actually ran. Keep the current research question and evaluation protocol.
 
 ## What goes in and comes out?
 
@@ -77,6 +77,4 @@ Keep dataset images under `data/`, model weights under `models/`, and generated 
 
 The repository expands the proposal into implementation instructions. It does not claim professor approval. Changes to the scientific scope must be recorded in the decision log.
 
-## Git ownership
 
-The initial local commit uses **Omkar Lashkare <omkarvilas.lashkare@stonybrook.edu>**. Omkar requested **lashkareomkar@gmail.com** for subsequent local commits. The initial commit's authorship was preserved. See [Git workflow](docs/GIT_WORKFLOW.md) for attribution details. Omkar created this GitHub repository as public.

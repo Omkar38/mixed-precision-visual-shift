@@ -14,11 +14,9 @@ experiment has been run.** Every statement below is labelled as one of:
 
 Related documents: the protocol is in [EXPERIMENT_PROTOCOL.md](EXPERIMENT_PROTOCOL.md),
 the milestone plan in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), and the
-proposal in [PROPOSAL_SNAPSHOT.md](PROPOSAL_SNAPSHOT.md). Kaushal's Mac M0/M1
-work is documented in
-[`M1_MAC_FINDINGS.md` on `Kaushal-Commits`](https://github.com/Omkar38/mixed-precision-visual-shift/blob/Kaushal-Commits/docs/M1_MAC_FINDINGS.md),
-and Omkar's architecture and compute analysis in
-[`PROJECT_DEEP_DIVE.md` on `docs/project-deep-dive`](https://github.com/Omkar38/mixed-precision-visual-shift/blob/docs/project-deep-dive/docs/PROJECT_DEEP_DIVE.md).
+proposal in [PROPOSAL_SNAPSHOT.md](PROPOSAL_SNAPSHOT.md). The M0/M1 model audit is
+documented in [M1_MAC_FINDINGS.md](M1_MAC_FINDINGS.md), and the architecture and
+compute analysis in [PROJECT_DEEP_DIVE.md](PROJECT_DEEP_DIVE.md).
 
 ---
 
@@ -188,10 +186,10 @@ answers. Nothing in this section is a result.
 
 ### What we expect to see (estimated, to be replaced by measurements)
 
-Omkar's deep dive derives the following weight memory per config from the
+The deep dive derives the following weight memory per config from the
 published model config, assuming standard NF4 storage (0.5 bytes/param plus
 block scales) with embeddings, norms, and `lm_head` left at FP16. The FP16
-total matches Kaushal's **measured** 4,493,569,888 bytes. Everything else is
+total matches the **measured** 4,493,569,888 bytes. Everything else is
 **estimated**.
 
 | Vision | Connector | Language | Est. weight MB |
@@ -281,7 +279,7 @@ variants inherit their group, and manifests and transforms are reproducible.
 |---|---|---|---|
 | 1 | **GPU access** | NF4 needs CUDA. The Mac cannot run it, so all of M1's NF4 work depends on Colab or another NVIDIA machine. | Colab notebook works on the free T4 (§2.1). Keep the Mac for code and tests. Consider renting a GPU if Colab access is unreliable. |
 | 2 | **Colab session limits** | Sessions can disconnect or time out, and GPU availability and usage quotas are limited. A long run can be lost. | Batch size 1, one config per process, and a **resumable cache** (M3) so a disconnect loses at most the current item. Save artifacts to Drive. |
-| 3 | **Compute time** | Proposal design is ~56,000 test answers; including dev and pilot, about **~95,000** (estimated). Omkar estimates **15–40 GPU-hours** at 0.3–1.0 s/answer. NF4 can be *slower* than FP16 because weights are dequantized on the fly. | Measure real per-answer time on the GPU in M1 (the T4 smoke test is first-call only) and replace the estimate. Fallbacks in order: 2 severities instead of 3 (−29% conditions), merge duplicate configs, then SmolVLM2-500M. |
+| 3 | **Compute time** | Proposal design is ~56,000 test answers; including dev and pilot, about **~95,000** (estimated). An early estimate of **15–40 GPU-hours** assumed 0.3–1.0 s/answer; the only measured figure so far is a cold 3.78–4.05 s/answer, which would imply up to ~106 GPU-hours. NF4 can be *slower* than FP16 because weights are dequantized on the fly. | Measure real per-answer time on the GPU in M1 (the T4 smoke test is first-call only) and replace the estimate. Fallbacks in order: 2 severities instead of 3 (−29% conditions), merge duplicate configs, then SmolVLM2-500M. |
 | 4 | **Library compatibility** | Transformers 5.x already broke SmolVLM image-token merging. bitsandbytes must match the CUDA/PyTorch build, and Colab's preinstalled PyTorch can change without notice. | Pin Transformers 4.52.4; record every package version in the notebook's JSON; lock the CUDA environment once it works. |
 | 5 | **Component control may not work** | The loader might quantize modules we did not ask for, or skip ones we did. A config the loader accepts is not necessarily the config we wanted. | M1 audit gate (§3.2) checks every module. If it fails, we report a blocker rather than working around it. |
 | 6 | **8 GB memory assumption** | The proposal assumed an 8 GB GPU; activations and the KV cache add to weight memory and could cause out-of-memory errors. | First measurement is reassuring: FP16 peaked at 5.32 GB reserved on a synthetic image (§2.1). Re-check with real images during the pilot, and keep reporting weight bytes and peak GPU memory separately. |
@@ -297,10 +295,10 @@ variants inherit their group, and manifests and transforms are reproducible.
 | Action | Owner | Needs GPU |
 |---|---|---|
 | ~~Run the Colab FP16 smoke-test notebook~~ Done on T4, 2026-10-27 (§2.1) | Gauri | Yes |
-| Implement selective NF4 replacement and run the audit gate for all 8 configs | Kaushal, validated by Gauri | Yes |
-| Write the M2 leakage and determinism tests with synthetic fixtures | Gauri | No |
-| Implement POPE/CelebA loaders, splits, and corruptions | Kaushal | No |
-| Choose the POPE variant and CelebA attributes; record in `DECISIONS.md` | Omkar, with team | No |
+| Implement selective NF4 replacement and run the audit gate for all 8 configs | Pipeline lead, validated by evaluation lead | Yes |
+| Write the M2 leakage and determinism tests with synthetic fixtures | Evaluation lead | No |
+| Implement POPE/CelebA loaders, splits, and corruptions | Pipeline lead | No |
+| Choose the POPE variant and CelebA attributes; record in `DECISIONS.md` | Design lead, with team | No |
 
 Nothing here should be reported as GPU-tested or as an experimental result
 until the corresponding run has actually completed and its outputs are

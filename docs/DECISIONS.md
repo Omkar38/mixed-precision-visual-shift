@@ -13,11 +13,9 @@
 
 ## 2026-10-05 — Handoff construction
 
-Created a documentation-first repository based on the current Final tab. No experiment has run. Student IDs and teammates' email addresses were omitted from the repository snapshot; member names and responsibilities were retained.
+Created a documentation-first repository based on the current Final tab. No experiment has run. Student IDs, member names, and email addresses are omitted from the repository; responsibilities are recorded by project role.
 
 The implementation protocol adds proposed choices (strict parsing, image-group mixture assignment, bootstrap count) to make engineering concrete. These are explicitly not yet pilot-validated or frozen.
-
-Git commits made on Omkar's behalf use Omkar Lashkare and the email listed in the proposal. GitHub account association remains unverified. Publication defaults to private until Omkar chooses otherwise.
 
 ## Open decisions
 
@@ -34,6 +32,10 @@ Git commits made on Omkar's behalf use Omkar Lashkare and the email listed in th
 | Mixture allocation and rounding | Constant sample/image count checks |
 | Bootstrap settings and summary weights | Declared analysis plan before test scoring |
 | Need for a fallback model | Measured failure/runtime evidence |
+| NF4 double quantization on or off | Freeze before the pilot; it shifts every measured cap |
+| Blur severity defined in absolute pixels or relative to image size | Cross-domain comparability check between COCO and CelebA |
+| Which measured caps are primary | Pilot confirmation without comparative test accuracy |
+| Steady-state inference throughput | Pilot measurement; the audit figure is a cold first call |
 
 ## 2026-10-16 — Mac M1 development environment
 
@@ -123,3 +125,41 @@ Alternatives considered:
 Effect on comparability:
 Protocol version/hash:
 Owner:
+
+## 2026-10-29 — Issues raised by the post-audit review
+
+Four decisions were added to the open list above after reviewing the completed
+M1 CUDA audit and the M2 pipeline. They are recorded here because each one can
+silently invalidate comparisons if it is settled late or inconsistently.
+
+**Double quantization.** The audited candidates use NF4 with double
+quantization off, which costs 127,703,488 bytes of `absmax` metadata on the
+fully NF4 candidate — exactly 0.0625 bytes per quantized parameter. Enabling it
+would cut that to roughly 16 MB and therefore move every measured cap. The
+setting must be frozen before the pilot and recorded with the cap definitions.
+
+**Blur severity units.** `gaussian_blur` values are Pillow radii in absolute
+pixels. A CelebA aligned crop is roughly 178 px wide and a COCO image roughly
+640 px, so one radius is a far stronger corruption on CelebA. Either define the
+radius relative to the short edge, or treat severities as per-domain and never
+compare a raw severity across domains. Until this is settled, cross-domain
+severity statements are not meaningful.
+
+**Primary caps.** The smallest cap admitting two candidates, 1,587,421,408
+bytes, satisfies M1 acceptance but compares two candidates that differ only in
+connector precision. The caps admitting four and six candidates
+(2,178,324,832 and 3,902,666,464 bytes) vary vision and backbone precision and
+are the scientifically useful choices. Not frozen.
+
+**Throughput.** The only measured generation figures, 3.78 to 4.05 seconds per
+answer, are cold single calls including warm-up. Depending on steady-state
+throughput the full design costs between roughly 26 and 106 GPU-hours.
+Measuring this is the pilot's first task.
+
+## 2026-10-29 — Corruption signature normalization
+
+`CorruptionSpec.value` is now coerced to `float` and booleans are rejected.
+Previously `2` and `2.0` produced different `signature` digests and `True` was
+accepted as a blur radius, so one transform could hold three distinct cache
+keys. Cache keys must include the image transformation, so this was a
+correctness defect rather than a style issue. Two regression tests cover it.

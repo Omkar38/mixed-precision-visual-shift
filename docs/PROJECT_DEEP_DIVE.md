@@ -1,14 +1,32 @@
 # Mixed Precision Allocation Under Visual Distribution Shift — Project Deep Dive
 
-**Analysis document.** Written 2026-10-22 for orientation and planning. This is
-not the protocol and not a results document. The authoritative specification is
-[PROPOSAL_SNAPSHOT.md](PROPOSAL_SNAPSHOT.md) (the proposal's Final tab); protocol
-changes belong in [DECISIONS.md](DECISIONS.md); real status lives in
-[STATUS.md](STATUS.md).
+**Analysis document.** Revised 2026-10-29. This is not the protocol and not a
+results document. The authoritative specification is
+[PROPOSAL_SNAPSHOT.md](PROPOSAL_SNAPSHOT.md); protocol changes belong in
+[DECISIONS.md](DECISIONS.md); current state lives in
+[live_STATUS.md](live_STATUS.md).
 
-Numbers in this document are labelled either **measured**, **derived**, or
-**estimated**. Nothing here is an experimental result. No experiment has been
-run yet.
+Every number is labelled **measured**, **derived**, or **estimated**. No
+task-accuracy experiment has been run. There is still no Δ result.
+
+## What changed in this revision
+
+The first revision of this document (2026-10-22) predicted per-configuration
+memory from the published model config while NF4 was still blocked on hardware.
+The CUDA audit has since completed on a Colab Tesla T4, so this revision
+replaces predictions with measurements:
+
+| Area | First revision | Now |
+|---|---|---|
+| M1 component control | unproven, flagged as the project's main blocker | **measured and accepted** — 331 linear modules, zero mismatches |
+| Per-config memory | derived from config.json | **measured** on a T4; predictions held to 0.09% |
+| Connector size | 21.2 M params (derived) | **confirmed**, and it is exactly **one** linear module |
+| Compute budget | estimated 15–40 GPU-hours | **revised upward** — the only measurement implies up to ~106 |
+| Caps | predicted four tight pairs | **confirmed**, exact byte thresholds now known |
+
+Two new issues are raised here that were not visible before the audit:
+the cross-domain blur-radius confound (§2.6, threat 3) and the
+double-quantization decision (§2.3).
 
 ---
 
@@ -144,104 +162,177 @@ Component sizes **derived** from the published `config.json` for
 SigLIP-SO400M/14 @384 vision tower, a pixel-shuffle MLP connector
 (`scale_factor=3`), and a SmolLM2-1.7B text backbone.
 
-| Component | Params | Share | FP16 |
-|---|---:|---:|---:|
-| Vision encoder (linear layers) | 411.1 M | 18.3% | 822 MB |
-| Vision encoder (patch/pos embeddings) | 1.5 M | 0.1% | 3 MB |
-| **Connector** | **21.2 M** | **0.9%** | **42 MB** |
-| Text backbone (linear layers) | 1,610.6 M | 71.7% | 3,221 MB |
-| Text embedding | 100.9 M | 4.5% | 202 MB |
-| `lm_head` | 100.9 M | 4.5% | 202 MB |
-| **Total** | **2,246.3 M** | 100% | **4,493 MB** |
+| Component | Params | Share | FP16 | Linear modules (measured) |
+|---|---:|---:|---:|---:|
+| Vision encoder (linear layers) | 411.1 M | 18.3% | 822 MB | 162 |
+| Vision encoder (patch/pos embeddings) | 1.5 M | 0.1% | 3 MB | — |
+| **Connector** | **21.2 M** | **0.9%** | **42 MB** | **1** |
+| Text backbone (linear layers) | 1,610.6 M | 71.7% | 3,221 MB | 168 |
+| Text embedding | 100.9 M | 4.5% | 202 MB | — |
+| `lm_head` (FP16 exception) | 100.9 M | 4.5% | 202 MB | — |
+| **Total** | **2,246.3 M** | 100% | **4,493 MB** | **331** |
 
-**Cross-check:** this derivation totals 4.493 GB in FP16 against the
-**measured** 4,493,569,888 bytes recorded in
-[M1_MAC_FINDINGS.md](M1_MAC_FINDINGS.md) — agreement to within 0.02%. The
-breakdown can be trusted for planning, though M1 must confirm it module by
-module.
+The FP16 total is **measured** at 4,493,569,888 bytes — identical on CPU
+(macOS) and on the T4, and matching this derivation to within 0.02%.
 
 ### The connector problem
 
-**The connector is 0.9% of the weights.** This is the most important structural
-fact in the project and it has consequences the proposal does not yet address.
+**The connector is 0.9% of the weights and exactly one linear module.** This is
+the most important structural fact in the project.
 
-Quantizing the connector saves roughly 30 MB — 0.7% of the model. So in any
-accuracy-versus-memory plot, the connector's precision is **nearly free**. That
-cuts both ways:
+Quantizing it saves a **measured** 30,523,328 bytes — 0.7% of the model. So in
+any accuracy-versus-memory plot, the connector's precision is nearly free. That
+cuts three ways:
 
 - *Bad news:* the connector cannot be a meaningful lever for hitting a memory
   cap. You will never need to quantize it to fit a budget.
 - *Good news:* it makes the central hypothesis cheap to test. If blur damage and
   quantization noise really do compound at the connector, you get that finding
-  for 30 MB, which is an unusually clean result — a precision decision with
-  negligible memory cost and a measurable accuracy consequence.
-- *Design consequence:* if connector precision shows **any** accuracy benefit
-  under shift, the practical recommendation is simply "always keep the connector
-  at FP16." That is a useful, concrete deployment rule, but note it is a
-  conclusion about accuracy only, not about the memory trade-off.
+  for 30 MB — a precision decision with negligible memory cost and a measurable
+  accuracy consequence.
+- *The new caveat:* because it is a **single layer**, a null connector result is
+  ambiguous. "Connector precision does not matter" and "one 21 M-param layer is
+  too small a lever to show an effect" predict the same measurement. Say so in
+  the write-up rather than claiming the stronger reading.
 
-## 2.2 The eight configurations and their memory structure
+If connector precision shows any accuracy benefit under shift, the practical
+recommendation is simply "always keep the connector at FP16" — a concrete
+deployment rule, but a conclusion about accuracy only, not about the memory
+trade-off.
 
-**Estimated** weight memory per configuration, pending the M1 audit. Assumes
-NF4 at 0.5 bytes/param plus one FP32 `absmax` per 64-value block (0.5625
-bytes/param effective, double quantization off), and that embeddings, norms, and
-`lm_head` are excluded from conversion — the standard bitsandbytes default.
+## 2.2 The eight configurations: measured
 
-| Vision | Connector | Backbone | Weight MB | % of FP16 |
-|---|---|---|---:|---:|
-| 4-bit | 4-bit | 4-bit | 1,556 | 35% |
-| 4-bit | FP16 | 4-bit | 1,586 | 35% |
-| FP16 | 4-bit | 4-bit | 2,147 | 48% |
-| FP16 | FP16 | 4-bit | 2,177 | 48% |
-| 4-bit | 4-bit | FP16 | 3,871 | 86% |
-| 4-bit | FP16 | FP16 | 3,902 | 87% |
-| FP16 | 4-bit | FP16 | 4,462 | 99% |
-| FP16 | FP16 | FP16 | 4,493 | 100% |
+**Measured** on a Colab Tesla T4, all eight loaded freshly from the same
+checkpoint. Weight bytes count unique parameter storage, persistent buffers, and
+exposed quantization metadata. Peak reserved is a separate CUDA measurement from
+one synthetic 384×384 inference at batch size 1.
 
-The structure that matters: **the eight configurations form four tight pairs.**
-Within each pair the only difference is the connector (~30 MB apart). Between
-pairs, the gaps are large — ~560 MB for the vision encoder, ~1,700 MB for the
-backbone.
+| Vision | Conn. | Backbone | Weight bytes | GiB | Peak reserved GiB | Gen. s |
+|---|---|---|---:|---:|---:|---:|
+| NF4 | NF4 | NF4 | 1,556,898,080 | 1.450 | 2.283 | 3.98 |
+| NF4 | FP16 | NF4 | 1,587,421,408 | 1.478 | 2.283 | 4.05 |
+| FP16 | NF4 | NF4 | 2,147,801,504 | 2.000 | 2.600 | 3.90 |
+| FP16 | FP16 | NF4 | 2,178,324,832 | 2.029 | 2.627 | 3.89 |
+| NF4 | NF4 | FP16 | 3,872,143,136 | 3.606 | 4.182 | 3.98 |
+| NF4 | FP16 | FP16 | 3,902,666,464 | 3.635 | 4.213 | 3.85 |
+| FP16 | NF4 | FP16 | 4,463,046,560 | 4.157 | 4.781 | 4.01 |
+| FP16 | FP16 | FP16 | 4,493,569,888 | 4.185 | 4.957 | 3.78 |
 
-This is good news for the protocol's requirement of "at least two feasible
-configurations at a common cap." A cap just above 2,177 MB admits four
-configurations that differ in vision and connector precision; a cap near 3,902
-MB admits six. The requirement is comfortably satisfiable.
+All eight produced a successful deterministic generation. **This checks
+execution viability only** — it is not accuracy, robustness, real-image, or
+throughput evidence.
 
-But it reframes what the study is really measuring. Because the backbone
-dominates memory so heavily, the interesting within-cap comparisons are almost
-entirely **vision-encoder and connector decisions made at a fixed backbone
-precision**. That is well matched to the research question — the hypothesis is
-about the visual pathway — but the write-up should state it plainly rather than
-implying a free three-way trade-off.
+### Prediction versus measurement
 
-One risk to check during M1: whether the four pairs are **effectively duplicates**
-in accuracy as well as memory. If connector precision turns out to make no
-measurable accuracy difference, the design collapses from 8 configurations to 4,
-which halves the inference budget — a welcome saving, but it must be established
-empirically, not assumed.
+The first revision of this document derived these totals before any GPU was
+available. Every configuration landed within 1.4 MB:
 
-## 2.3 Why NF4 makes the result cleaner than the earlier design
+| Candidate | Derived | Measured | Error |
+|---|---:|---:|---:|
+| NF4/NF4/NF4 | 1,556 MB | 1,556.9 MB | −0.058% |
+| NF4/FP16/NF4 | 1,586 MB | 1,587.4 MB | −0.090% |
+| FP16/NF4/NF4 | 2,147 MB | 2,147.8 MB | −0.037% |
+| FP16/FP16/NF4 | 2,177 MB | 2,178.3 MB | −0.061% |
+| NF4/NF4/FP16 | 3,871 MB | 3,872.1 MB | −0.030% |
+| NF4/FP16/FP16 | 3,902 MB | 3,902.7 MB | −0.017% |
+| FP16/NF4/FP16 | 4,462 MB | 4,463.0 MB | −0.023% |
+| FP16/FP16/FP16 | 4,493 MB | 4,493.6 MB | −0.013% |
+
+This matters beyond bookkeeping: the storage model is now validated, so memory
+consequences of future candidate changes (an 8-bit level, a different model
+size) can be computed before spending GPU time.
+
+### Component savings are exactly additive
+
+**Measured**, holding the other two components at FP16:
+
+| Component moved to NF4 | Bytes saved |
+|---|---:|
+| Vision encoder | 590,903,424 |
+| Connector | 30,523,328 |
+| Language backbone | 2,315,245,056 |
+
+```
+4,493,569,888 − 590,903,424 − 30,523,328 − 2,315,245,056 = 1,556,898,080
+```
+
+That is exactly the measured all-NF4 total. **Perfect additivity is the
+strongest evidence in the audit** that the three component controls are
+independent and do not contaminate each other — the single most dangerous
+failure mode for this study, now ruled out at the storage level.
+
+### Cap structure
+
+The eight candidates form **four tight pairs**; within each pair only the
+connector differs (~30 MB), while vision costs ~591 MB and the backbone ~2,315
+MB. Exact **measured** thresholds:
+
+| Cap (bytes) | Eligible | Vision varies | Backbone varies | Use as a primary cap? |
+|---|---:|---|---|---|
+| 1,556,898,080 | 1 | no | no | no — single candidate |
+| 1,587,421,408 | 2 | no | no | **no — connector-only comparison** |
+| 2,147,801,504 | 3 | yes | no | usable |
+| **2,178,324,832** | **4** | **yes** | no | **yes** |
+| 3,872,143,136 | 5 | yes | yes | usable |
+| **3,902,666,464** | **6** | **yes** | **yes** | **yes** |
+| 4,463,046,560 | 7 | yes | yes | no — barely constrains |
+| 4,493,569,888 | 8 | yes | yes | no — equals FP16 size |
+
+The M1 acceptance criterion asked only for *a* cap with two distinct candidates,
+and 1,587,421,408 satisfies it. But it is the **weakest possible** scientific
+choice, because its two candidates differ only in connector precision. The audit
+report flags this itself.
+
+**Recommendation:** freeze **2,178,324,832** (four candidates, vision and
+connector vary at NF4 backbone) and **3,902,666,464** (six candidates, backbone
+varies too) as the primary caps. Both must still be confirmed during the pilot
+without consulting comparative test accuracy.
+
+## 2.3 The quantizer, and a decision that must be frozen
+
+The study uses bitsandbytes NF4: **measured** policy is NF4 storage, FP16
+compute, uint8 quantized storage, explicit FP16 component-root exclusions, an
+FP16 `lm_head` exception, and **no double quantization**.
+
+The metadata overhead confirms the scheme exactly. For the all-NF4 candidate:
+
+| Storage category | Bytes |
+|---|---:|
+| Parameter storage | 1,429,194,464 |
+| Persistent buffers | 128 |
+| Exposed quantization metadata | 127,703,488 |
+| Total | 1,556,898,080 |
+
+127,703,488 bytes over 2,042.9 M quantized params is **0.0625 bytes/param** —
+exactly one FP32 `absmax` per 64-value block. The storage model is fully
+accounted for.
+
+> **Open decision.** Enabling double quantization would shrink that metadata
+> from ~128 MB to ~16 MB and therefore **shift every cap in §2.2**. It is
+> currently off. Freeze this in [DECISIONS.md](DECISIONS.md) before the pilot;
+> changing it mid-study invalidates cross-run comparisons. Consistency matters
+> more here than the 112 MB.
+
+### Why NF4 makes the result cleaner than the earlier design
 
 An earlier version of this proposal used GPTQ or AWQ, which are
 **calibration-dependent**: they examine sample data and adjust the quantized
-weights accordingly. The final design uses bitsandbytes NF4, which is
-**data-free** — the quantized weights are a deterministic function of the
-original weights alone.
+weights accordingly. The final design uses NF4, which is **data-free** — the
+quantized weights are a deterministic function of the original weights alone.
 
-This is a genuine improvement in experimental hygiene, not just a simplification.
-With a calibration-dependent quantizer, a positive Δ has two possible causes
-that are hard to separate: the configuration choice was wrong, or the
-calibration data was unrepresentative. With NF4 there is no calibration step, so
-**a positive Δ can only come from the configuration choice.** The confound is
-designed out rather than controlled for.
+This is a genuine improvement in experimental hygiene. With a
+calibration-dependent quantizer, a positive Δ has two causes that are hard to
+separate: the configuration choice was wrong, or the calibration data was
+unrepresentative. With NF4 there is no calibration step, so **a positive Δ can
+only come from the configuration choice.** The confound is designed out rather
+than controlled for.
 
 The cost is that the study no longer speaks to calibration-set selection, which
-is what most of the related literature is about. The related-work framing should
-therefore cite that literature as motivation — methods like MODE, SPEED-Q, and
-MASQuant all measure component sensitivity on a sample and allocate bits from
-that measurement, and none test whether the measurement transfers — while being
-explicit that this study tests a cleaner, narrower version of the question.
+is what most of the related literature is about. Cite that literature as
+motivation — methods like MODE, SPEED-Q, and MASQuant all measure component
+sensitivity on a sample and allocate bits from it, and none test whether the
+measurement transfers — while being explicit that this study tests a cleaner,
+narrower version of the question.
 
 ## 2.4 Selection procedure
 
@@ -288,114 +379,139 @@ item-difficulty variance cancels.
 
 **Selection stability** is a separate analysis from Δ. Resample the development
 set and re-run selection; record how often each configuration wins. If the
-winner flips constantly across resamples, then Δ is measuring noise in the
-selection procedure rather than a real property of the model — and that finding
-must be reported, not buried.
+winner flips constantly across resamples, Δ is measuring noise in the selection
+procedure rather than a real property of the model — and that finding must be
+reported, not buried.
 
 **Reporting a null honestly** means stating which effect sizes the study can
 *exclude*. "No significant difference" with an interval of ±8 points says almost
 nothing. The same statement with ±1.5 points is a real invariance result. This
-distinction decides whether a null outcome is a contribution or a failed
-experiment, so power should be sanity-checked at the pilot stage, not discovered
-at the end.
+decides whether a null outcome is a contribution or a failed experiment, so
+power should be sanity-checked at the pilot stage.
 
 ## 2.6 Threats to validity
 
-| # | Threat | Why it bites | Mitigation |
+| # | Threat | Status | Mitigation |
 |---|---|---|---|
-| 1 | **Component control doesn't actually work** | bitsandbytes may convert modules you didn't target, or silently skip ones you did. A config accepted by the loader is not a config that exists. | Per-module dtype and quantization-state dump for all 8 configs. This is M1's acceptance gate. A hard blocker if it fails — report it, don't work around it. |
-| 2 | **Severities miss the useful window** | Too mild and nothing changes; too severe and every config fails equally. Either way Δ ≈ 0 for an uninteresting reason. | The 100-question pilot must show graded degradation — accuracy declining with severity but not collapsing to chance. Pick severities on *pilot* data only. |
-| 3 | **Split leakage** | Splitting after corruption, or by question instead of by image, puts variants of one image on both sides. Results become meaningless and the error is nearly invisible. | Split by original image *before* generating variants; split CelebA by identity. Automated leakage test with synthetic fixtures. |
-| 4 | **Configurations are effectively duplicates** | If connector precision changes nothing, 8 configs are really 4. | Detect during M1 via effective-signature deduplication; reduces cost if confirmed. |
-| 5 | **Selection noise swamps the effect** | With 8 candidates and a small dev set, the argmax is unstable; Δ then measures variance. | Report selection frequencies alongside Δ. Size the dev set from pilot variance. |
-| 6 | **Invalid answers smuggle in bias** | A model emitting unparseable text looks "wrong" in a way that may correlate with configuration — so parsing rules could drive the result. | Count invalid as incorrect, fix the parser before selection, report invalid rate per configuration, and keep infrastructure failures distinguishable from model answers. |
-| 7 | **8 GB ceiling** | The FP16 reference is the largest configuration; OOM at high image resolution is plausible. | Batch size 1, fixed modest resolution, pilot before committing. Documented fallback to SmolVLM2-500M. |
-| 8 | **Schedule** | The proposal froze the protocol on Oct 12; it is now Oct 22 and M1 is blocked on hardware access. | The critical path is a CUDA machine, not code volume. See §2.7. |
+| 1 | **Component control doesn't work** | **Resolved.** 331/331 modules converted as requested, zero mismatches, 8 distinct signatures, savings exactly additive | Audit is re-runnable; keep it as a gate whenever the candidate grid or library versions change |
+| 2 | **Throughput** | **Open, now the top risk.** Only measurement is 3.78–4.05 s/answer (cold, includes warm-up) | Measure steady-state in the pilot before committing. See §3.5 |
+| 3 | **Blur radius is not comparable across domains** | **Open, newly identified.** Gaussian radius is in absolute pixels, so one radius is relatively far stronger on a ~178 px CelebA crop than on a ~640 px COCO image | Define severity **relative to image size** (radius as a fraction of the short edge), or document that severities are per-domain and never compare raw severity across domains. A protocol decision, not a code fix |
+| 4 | **Severities miss the useful window** | Open | The 100-question pilot must show graded degradation — accuracy declining with severity but not collapsing to chance. Pick severities on *pilot* data only |
+| 5 | **Split leakage** | Mitigated | Split by original image before generating variants; CelebA by identity. Checksum-linked groups now merged so identical pixels under two IDs cannot straddle splits. 42 tests pass |
+| 6 | **Connector result is ambiguous** | Open by construction | One layer; a null is not evidence of no effect (§2.1) |
+| 7 | **Selection noise swamps the effect** | Open | Report selection frequencies alongside Δ; size the dev set from pilot variance |
+| 8 | **Invalid answers smuggle in bias** | Open | Count invalid as incorrect, fix the parser before selection, report invalid rate per configuration, keep infrastructure failures distinguishable from model answers |
+| 9 | **8 GB ceiling** | Largely resolved | FP16 reference peaked at 4.957 GiB with one synthetic image. Re-check with real images; weight bytes and peak GPU memory stay reported separately |
+| 10 | **Double quantization changes every cap** | Open decision | Freeze before the pilot (§2.3) |
 
-## 2.7 Current state and the critical path
-
-From [STATUS.md](STATUS.md) and the `Kaushal-Commits` branch:
+## 2.7 Current state
 
 | Milestone | Status |
 |---|---|
-| **M0** — environment, model revision pinned | Done on macOS; **not** on CUDA |
-| **M1** — component control + audit | FP16 audit implemented and CPU-load-tested; **NF4 blocked**, inference never validated |
-| **M2** — data and corruption pipeline | Not started |
+| **M0** — environment, model revision pinned | **Done**, macOS + CUDA |
+| **M1** — component control + audit | **Accepted** — CUDA/NF4-audited on a T4 |
+| **M2** — data and corruption pipeline | **Implemented**; POPE validated on real data, CelebA annotations validated, images not downloaded |
 | **M3** — pilot, prediction cache, protocol freeze | Not started |
 | **M4** — selection and statistics | Not started |
 | **M5** — main runs and report | Not started |
 
-What exists: `src/mpvs/{model,quantization,memory,cli}.py`, 7 passing unit
-tests, a pinned macOS environment (PyTorch 2.14.1, Transformers 4.52.4 — 5.20.1
-was rejected after its SmolVLM image-token merger failed), the model pinned to
-revision `482adb537c021c86670beed01cd58990d01e72e4`, and the measured FP16
-storage figure used above.
+**M2 real-data validation, Phase A.** POPE-COCO is fully checked against the
+three official COCO files and the 500 referenced val2014 images: 3,000 questions,
+500 images, 1,500/1,500 yes/no, 6 questions per image, no duplicate IDs, no
+missing images, deterministic normalization. CelebA annotation files match
+published MD5s — 202,599 images, 40 attributes, 10,177 identities — but the
+images themselves are not yet downloaded. 615 identities carry inconsistent
+`Male` labels; that is dataset label noise to document, not to repair.
 
-**The single blocker is NF4 on CUDA.** bitsandbytes 4-bit requires an NVIDIA
-GPU; Apple Silicon cannot run it, and the M1 host additionally reported
-`mps_available=False`. Everything downstream of M1 — the data pipeline, the
-pilot, the cache, the statistics — is independent of this blocker and could
-proceed in parallel on any machine.
+Trial splits showed zero leakage and byte-identical reruns; trial corruptions
+produced 420 variants with zero pixel mismatches across two renders.
 
-**Recommended sequencing.** Do not wait on GPU access to start M2. The corruption
-pipeline, the split logic, the leakage tests, and the answer parser need no GPU
-and are on the critical path to the pilot. Getting onto CUDA hardware unblocks
-M1; writing M2 in the meantime is free progress.
+**Still to decide (not frozen):** the POPE sampling variant, the CelebA
+attribute set, the identity-capped balanced sampling rule, split sizes, the
+seed, corruption severities, and the primary caps.
+
+## 2.8 Code review findings from this revision
+
+Reviewed `splits.py`, `corruptions.py`, `records.py`, `memory.py`, and
+`quantization.py`. The split logic is sound: `group_id` resolves to the CelebA
+identity and the POPE original image, so protocol-level grouping is correct by
+construction, and the union-find that merges groups sharing an image checksum
+correctly picks the lexicographically smallest member as representative, so
+data without shared checksums keeps its previous assignment.
+
+One defect was found and fixed in this revision:
+
+> `CorruptionSpec.value` was not normalized, so `2` and `2.0` hashed to
+> different `signature` values, and `True` was accepted as a blur radius
+> (`bool` is an `int` subclass, and `True <= 0` is false). Three spellings of
+> one transform produced three cache keys. Since `AGENTS.md` requires cache
+> keys to include the image transformation, this would have caused silent
+> cache misses and inconsistent manifest immutability comparisons. `value` is
+> now coerced to `float` and `bool` is rejected, with two regression tests.
 
 ---
 
-# Part 3 — Minimum specifications
+# Part 3 — Specifications
 
 ## 3.1 The hard requirement
 
-**An NVIDIA GPU with CUDA.** This is not a preference. bitsandbytes NF4 — the
-quantizer the entire study is built on — has no Apple Silicon or CPU backend.
-Without it there is no 4-bit configuration, and with no 4-bit configuration
-there is no experiment.
+**An NVIDIA GPU with CUDA.** bitsandbytes NF4 has no Apple Silicon or CPU
+backend. Apple Silicon is usable for development only: code, unit tests, module
+audits, and FP16 CPU loading.
 
-Apple Silicon is usable for **development only**: writing code, running unit
-tests, auditing module names, and loading FP16 on CPU. That is exactly how far
-the existing M1 work got, and it is the correct use of that hardware.
+This is now **confirmed in both directions** — the macOS host reported no CUDA,
+no bitsandbytes, and `mps_available=False`, while the full eight-candidate audit
+succeeded on a T4.
 
-## 3.2 Minimum viable configuration
+## 3.2 Validated configuration
 
-| Resource | Minimum | Reasoning |
+The **measured** environment in which the audit succeeded:
+
+| Item | Value |
+|---|---|
+| GPU | Tesla T4, 15,360 MiB, compute capability 7.5 |
+| Driver | 580.82.07 |
+| CUDA runtime (PyTorch) | 13.0 |
+| PyTorch | 2.11.0+cu130 |
+| Transformers | **4.52.4** (5.20.1 breaks SmolVLM image-token merging) |
+| bitsandbytes | 0.50.2 |
+| Accelerate | 1.15.0 |
+| Python | 3.13.16 |
+
+A free-tier Colab T4 is sufficient for the audit and is the cheapest known
+working path.
+
+## 3.3 Minimum and recommended
+
+| Resource | Minimum | Recommended |
 |---|---|---|
-| **GPU** | NVIDIA, 8 GB VRAM, compute capability ≥ 7.5 (Turing: RTX 2060 / T4 or newer) | The FP16 reference is the largest configuration at ~4.5 GB of weights; the rest is activations and fragmentation headroom. Verify the CC floor against your installed bitsandbytes version. |
-| **System RAM** | 16 GB | The checkpoint is loaded and inspected on CPU before transfer. Use `low_cpu_mem_usage=True` to keep peak near model size. |
-| **Disk** | 25 GB free | See §3.4 breakdown. |
-| **CPU** | Any modern 4-core | Not a bottleneck; image decoding and corruption are cheap. |
-| **CUDA** | 11.8 or 12.x, driver matched to the PyTorch build | Must match the bitsandbytes wheel. |
-| **Python** | 3.11 | Matches the pinned `mpvs-m1` environment. |
-| **OS** | Linux strongly preferred | bitsandbytes on Windows is viable but less well-tested. |
+| **GPU** | NVIDIA 8 GB, CC ≥ 7.5 (T4 / RTX 2060+) | 16–24 GB |
+| **System RAM** | 16 GB | 32 GB |
+| **Disk** | 25 GB free | 50 GB SSD |
+| **CPU** | Any modern 4-core | — |
+| **OS** | Linux preferred | Linux |
 
-## 3.3 Recommended configuration
-
-| Resource | Recommended | Benefit |
-|---|---|---|
-| **GPU** | 16–24 GB (RTX 4080/4090, A4000/A5000, L4, A100) | Removes OOM risk entirely, allows batching above 1, cuts wall-clock several-fold. |
-| **System RAM** | 32 GB | Comfortable headroom for the FP16 load path. |
-| **Disk** | 50 GB SSD | Room for both datasets uncropped, cached corrupted variants, and all prediction caches. |
-
-An 8 GB card is **sufficient** for the core study as specified — one
-configuration in memory at a time, batch size 1 — and the proposal is correctly
-scoped to it. The upgrade buys time, not feasibility.
+The 8 GB floor is **confirmed viable**: the largest configuration peaked at
+4.957 GiB reserved, leaving ~3 GB headroom on an 8 GB card. That measurement is
+for one 384×384 image, a short prompt, and four generated tokens — real POPE
+prompts with more image tokens will push higher, so re-check during the pilot.
+Compute capability 7.5 is confirmed as sufficient, not merely assumed.
 
 ## 3.4 Disk breakdown
 
 | Item | Size | Notes |
 |---|---:|---|
-| SmolVLM2-2.2B checkpoint (HF cache) | ~4.5 GB | FP16 safetensors |
-| COCO val2014 images | ~6.3 GB | Or ~80 MB if you fetch only the ~500 POPE-referenced images |
-| CelebA aligned images | ~1.4 GB | Must stay internal under the research-use agreement |
+| SmolVLM2-2.2B checkpoint | ~4.5 GB | FP16 safetensors |
+| COCO val2014 images | ~6.3 GB | Or ~80 MB for only the 500 POPE-referenced images |
+| CelebA aligned images | ~1.4 GB | Research-use agreement; stays internal |
 | Corrupted variants | 0–2 GB | Zero if generated deterministically on the fly — the better choice |
-| Prediction cache | ~100 MB | ~90k JSON records |
-| Conda environment | ~6 GB | PyTorch and CUDA libraries dominate |
-| **Total** | **~19–21 GB** | 25 GB minimum, 50 GB comfortable |
+| Prediction cache | ~100 MB | ~95k JSON records |
+| Python environment | ~6 GB | PyTorch and CUDA libraries dominate |
+| **Total** | **~19–21 GB** | 25 GB minimum |
 
-## 3.5 Compute budget
+## 3.5 Compute budget — revised upward
 
-**Derived** answer counts from the proposal's design:
+**Derived** answer counts:
 
 | Run | Count | Arithmetic |
 |---|---:|---|
@@ -404,41 +520,47 @@ scoped to it. The upgrade buys time, not feasibility.
 | Pilot | ~5,600 | 100 × 7 × 8 |
 | **Total** | **~95,000** | |
 
-**Estimated** wall-clock, to be replaced by real pilot measurements: at batch
-size 1 with yes/no outputs of a few tokens, expect roughly 0.3–1.0 s per answer
-on an 8 GB card. NF4 is often *slower* per token than FP16 despite being
-smaller, because weights are dequantized on the fly — do not assume the
-compressed configurations run faster. That puts the full sweep at roughly
-**15–40 GPU-hours**, plus per-configuration model loading overhead.
+The first revision of this document estimated 0.3–1.0 s per answer and 15–40
+GPU-hours. **That estimate had no measurement behind it and was too
+optimistic.** The audit's generation times are 3.78–4.05 s:
 
-This is comfortably feasible as an overnight-and-weekend job. **Measuring it is
-the pilot's main job** — treat these numbers as planning figures with no
-evidential weight.
+| s/answer | 95,000 answers |
+|---:|---:|
+| 4.0 | **105.6 GPU-hours** |
+| 2.0 | 52.8 |
+| 1.0 | 26.4 |
+
+The audit correctly labels its timings as cold single-inference measurements
+including load and warm-up, *not* a throughput benchmark, so steady-state is
+probably materially faster. But the honest planning position is that the budget
+is somewhere between 26 and 106 GPU-hours and **nobody knows where**.
+Establishing steady-state throughput is therefore the pilot's single most
+important job, ahead of severity selection.
+
+At the pessimistic end this does not fit free-tier Colab, whose sessions
+disconnect and whose GPU quota is limited. Budget for a paid runtime or a local
+card, and treat resumable caching as mandatory rather than an optimization.
 
 Two multipliers worth protecting:
 
 - **Caching is what makes this tractable.** Each (config, condition, question)
-  triple is inferred once and stored. Every memory cap, every mixture ratio, and
-  every bootstrap resample is then recomputed from the cache with no GPU
-  involvement. Without caching, each new analysis means re-running inference.
+  triple is inferred once and stored. Every memory cap, mixture ratio, and
+  bootstrap resample is then recomputed from the cache with no GPU involvement.
 - **Cache keys must be complete** — model and processor revision, actual audited
   quantization state, image transformation, prompt, and decoding settings. An
-  incomplete key silently serves one configuration's answers for another, which
-  is the kind of bug that invalidates a whole study without ever raising an
-  error.
+  incomplete key silently serves one configuration's answers for another. The
+  `CorruptionSpec.signature` defect in §2.8 was exactly this class of bug.
 
-## 3.5.1 If hardware is the constraint
+## 3.6 If hardware is the constraint
 
-Documented fallbacks, in the order they cost the least scientifically:
+Fallbacks, in order of increasing scientific cost:
 
 1. **Reduce severity count** from 3 to 2 per corruption → 5 conditions instead
    of 7, a 29% cut.
-2. **Drop to SmolVLM2-500M.** Same architecture family, so the three-component
-   structure is preserved; roughly 1 GB at FP16, runs anywhere. Conclusions
-   narrow to the smaller model.
-3. **Rent rather than buy.** The full sweep is tens of GPU-hours, which at
-   current spot rates for a 24 GB card is a very small amount of money and
-   removes the blocker this week rather than whenever hardware appears.
-
-Option 3 deserves serious consideration given that the protocol-freeze date has
-already passed and the project is otherwise blocked on hardware access.
+2. **Exploit the pair structure.** If connector precision proves accuracy-neutral
+   in the pilot, the eight candidates collapse to four and the budget halves.
+   This must be established empirically, not assumed.
+3. **Drop to SmolVLM2-500M.** Same architecture family, so the three-component
+   structure is preserved. Conclusions narrow to the smaller model.
+4. **Rent a GPU.** Tens of GPU-hours on a 24 GB card is inexpensive and removes
+   the schedule risk that free-tier session limits introduce.

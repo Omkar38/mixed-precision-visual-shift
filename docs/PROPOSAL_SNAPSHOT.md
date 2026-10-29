@@ -12,11 +12,8 @@ Mixed Precision Allocation Under Visual Distribution Shift
 
 ## 2. Group Members
 
-Gauri Chabukswar
-
-Omkar Lashkare
-
-Kaushal Satish Shelke
+Three group members. Names, student IDs, and email addresses are recorded in the
+proposal document and are intentionally omitted from this repository.
 
 ## 3. Problem Statement
 
@@ -58,7 +55,7 @@ Oct 19, 2026: baseline and main runs,Oct 27, 2026: midterm report with prelimina
 
 Nov 9, 2026: mixture, component, and cross-domain analyses,Nov 23, 2026: final draft and reproducibility checks,Dec 10, 2026: final report, code, and presentation.
 
-Responsibilities: Gauri Chabukswar — evaluation and validation,Kaushal Satish Shelke — data pipeline and quantization,Omkar Lashkare — experiment design, analysis, and writing.
+Responsibilities: evaluation lead — evaluation and validation; pipeline lead — data pipeline and quantization; design lead — experiment design, analysis, and writing.
 
 ## 8. References
 

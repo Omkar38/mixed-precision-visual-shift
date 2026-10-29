@@ -1,3 +1,4 @@
+import pytest
 from PIL import Image
 
 from mpvs.corruptions import (
@@ -148,3 +149,17 @@ def test_inheritance_rejects_variants_outside_the_declared_specs():
     report = validate_variant_inheritance(base, variants, specs[:2])
     assert report["valid"] is False
     assert report["undeclared_corruption_specs"] == ["gaussian_blur::blur-1"]
+
+
+def test_numeric_spelling_does_not_change_signature():
+    """2 and 2.0 are the same transform, so they must share one cache signature."""
+    assert (
+        CorruptionSpec(kind="gaussian_blur", severity_id="s1", value=2).signature
+        == CorruptionSpec(kind="gaussian_blur", severity_id="s1", value=2.0).signature
+    )
+
+
+def test_boolean_value_is_rejected():
+    """bool is an int subclass; True would otherwise pass as radius 1.0."""
+    with pytest.raises(ValueError):
+        CorruptionSpec(kind="gaussian_blur", severity_id="s1", value=True)

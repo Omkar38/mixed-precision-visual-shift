@@ -71,6 +71,6 @@ Suggested modules: `src/mpvs/selection.py`, `src/mpvs/metrics.py`, `src/mpvs/boo
 
 ## Working arrangement
 
-Suggested implementation ownership follows the proposal: Kaushal leads M1/M2, Gauri leads validation and M4, Omkar leads protocol decisions, analysis/reporting, and integration. This is a proposed work breakdown, not a claim that tasks have started.
+Suggested implementation ownership follows the proposal: the pipeline lead owns M1/M2, the evaluation lead owns validation and M4, and the design lead owns protocol decisions, analysis/reporting, and integration. This is a proposed work breakdown, not a claim that tasks have started.
 
 If both Claude Code and Codex are used simultaneously, use distinct Git worktrees and branches and agree on file ownership. Prefer sequential handoffs until the baseline architecture is established.

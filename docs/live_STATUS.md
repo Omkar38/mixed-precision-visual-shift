@@ -7,8 +7,7 @@ Updated: 2026-10-28.
 - Read the current proposal's Final tab.
 - Created the research context, shared agent instructions, implementation plan, and draft protocol.
 - Added a dependency-free environment inventory script.
-- Created a local Git repository using Omkar's author and committer identity.
-- Published the repository at `https://github.com/Omkar38/mixed-precision-visual-shift`.
+- Published the repository to its GitHub remote.
 - Completed the M1 CUDA/NF4 audit for all eight distinct component allocations
   on a Tesla T4; the machine-readable summary reports acceptance.
 
@@ -130,7 +129,7 @@ Do not freeze severities or split sizes from synthetic fixtures.
 
 ## 2026-10-22 — Gauri CUDA smoke-test contribution (historical; superseded below)
 
-- Created `notebooks/m1_colab_cuda_nf4 gauri.ipynb` on `Gauri-Commits`, branched from Omkar's `main`.
+- Created `notebooks/m1_colab_cuda_nf4 gauri.ipynb` on `Gauri-Commits`, branched from `main`.
 - The notebook checks for an L4, clones this branch, installs CUDA-side Python dependencies including bitsandbytes while retaining Colab's CUDA-enabled PyTorch, runs `scripts/preflight.py`, loads the pinned FP16 checkpoint, runs one synthetic inference, and records separate peak allocated/reserved GPU memory for loading and generation.
 - The notebook does not construct an NF4 model or claim GPU validation. It must be run on a Colab L4 after the branch is published; no Colab/GPU run has been performed yet.
 - Next: publish `Gauri-Commits`, run the notebook on an L4, and retain the generated preflight and smoke-test JSON artifacts outside tracked files.
@@ -152,7 +151,7 @@ Commands also run: `conda create -n mpvs-m1 python=3.11 pip -y`; dependency inst
 ## 2026-10-27 — Gauri midterm M0–M2 progress document
 
 - Added `docs/MIDTERM_M0_M2.md`, scoped to M0–M2 as agreed by the team: environment setup (Mac dev environment from `Kaushal-Commits`, Colab L4 environment from this branch), a proposed end-to-end flowchart and M1 audit-gate flowchart, the questions M1 validation will answer and how each outcome changes the plan, the proposed M2 data/corruption pipeline with the leakage and determinism checks to be written, and a risk table covering compute, Colab limits, library compatibility, data access, and schedule.
-- Every figure is labelled measured, implemented-not-run, estimated, or proposed. The per-config memory table is Omkar's estimate from `docs/project-deep-dive`; only the FP16 total (4,493,569,888 bytes) is measured (Kaushal, Mac CPU load).
+- Every figure is labelled measured, implemented-not-run, estimated, or proposed. The per-config memory table is the design lead's estimate from `docs/PROJECT_DEEP_DIVE.md`; only the FP16 total (4,493,569,888 bytes) is measured (Kaushal, Mac CPU load).
 - Documentation only. No code, model download, GPU run, dataset access, or experiment was performed. The Colab notebook has still not been run.
 - Next: run `notebooks/m1_colab_cuda_nf4 gauri.ipynb` on an L4 and record its measurements here; then write the M2 synthetic-fixture leakage tests.
 
@@ -166,17 +165,49 @@ Commands also run: `conda create -n mpvs-m1 python=3.11 pip -y`; dependency inst
 - Results added to `docs/MIDTERM_M0_M2.md` §2.1.
 - Next: implement selective NF4 replacement and run the component audit on the same Colab GPU; write the M2 synthetic-fixture leakage tests.
 
+## 2026-10-29 — Repository consolidation and post-audit review
+
+- Fast-forwarded `main` to the branch containing the completed M1 CUDA audit and
+  the M2 pipeline, then merged the deep-dive analysis branch. `main` now holds
+  all M0-M2 work in one history.
+- Reviewed `splits.py`, `corruptions.py`, `records.py`, `memory.py`, and
+  `quantization.py`. Split grouping is correct by construction: `group_id`
+  resolves to the CelebA identity and the POPE original image, and the
+  checksum union-find assigns the lexicographically smallest member as the
+  representative, so data without shared checksums keeps its prior assignment.
+- Fixed one defect in `CorruptionSpec`: `value` was not normalized, so `2` and
+  `2.0` hashed to different `signature` digests, and `True` was accepted as a
+  blur radius because `bool` subclasses `int`. One transform could therefore
+  hold three cache keys. `value` is now coerced to `float`, booleans are
+  rejected, and two regression tests were added.
+- Command: `PYTHONPATH=src python3 -m pytest -q` (Python 3.13.7, macOS, CPU) →
+  **42 passed**. Implemented and unit-tested on synthetic data only.
+- Revised [PROJECT_DEEP_DIVE.md](PROJECT_DEEP_DIVE.md) to replace the predicted
+  memory table with the measured T4 values. The earlier derivation matched the
+  measurements to within 0.09% on every candidate, so the storage model is
+  validated. Added the measured cap thresholds, the additivity cross-check, and
+  a code-review section.
+- Corrected the compute estimate. The earlier 15-40 GPU-hour figure assumed
+  0.3-1.0 s per answer with no measurement behind it; the audit's cold timings
+  of 3.78-4.05 s imply up to about 106 GPU-hours. Steady-state throughput is now
+  the top open risk and the pilot's first measurement.
+- Recorded four new open decisions in [DECISIONS.md](DECISIONS.md): double
+  quantization, blur severity units, which caps are primary, and throughput.
+  The blur-radius issue is a cross-domain comparability confound, since one
+  Pillow radius is far stronger on a ~178 px CelebA crop than on a ~640 px COCO
+  image.
+- Removed personal names, email addresses, and Git publication instructions from
+  the tracked documentation, including `docs/GIT_WORKFLOW.md`. Responsibilities
+  are now recorded by project role. Fixed the stale `docs/STATUS.md` references
+  in `AGENTS.md` and `CLAUDE.md` to point at this file.
+- Not done: no dataset download, no CelebA images, no pilot, no inference run,
+  no severity or cap frozen, no accuracy measurement of any kind.
+- Next: freeze double quantization and blur severity units, then run the M3
+  pilot to measure steady-state throughput before committing to the full sweep.
+
 ## Handoff rule
 
 Every coding session should append what changed, exact validation commands and outcomes, unresolved issues, and the next task. Do not mark GPU-tested or experiment-completed based on synthetic/unit tests.
-
-## Publication preparation (2026-10-05)
-
-- Omkar requested publication to a new repository and supplied `lashkareomkar@gmail.com` for future commits. Updated `docs/GIT_WORKFLOW.md` accordingly and set the repository-local Git identity to `Omkar Lashkare <lashkareomkar@gmail.com>`. The initial commit retains its existing authorship.
-- Ran `git status --short --branch` (clean `main` before this documentation change), `git remote -v` (no remote), `git ls-files` (only the research scaffold), and `du -sh . .git` (236K/140K). No raw data, checkpoints, or large artifacts are tracked.
-- Ran `gh auth status`: the saved `Omkar38` token initially appeared invalid. Completed `gh auth login -h github.com -p https -w`, then verified the authenticated account with `gh api user --jq .login` (`Omkar38`).
-- Omkar created the GitHub repository as public. Added and verified `README.md` through the connected GitHub account, fetched that commit with `git fetch origin main`, merged the two histories with `git merge --allow-unrelated-histories --no-commit origin/main`, then ran `git commit -m 'Merge GitHub README with local project history'` and `git push -u origin main` successfully.
-- The repository now contains the existing research scaffold and README. No scientific implementation or experiment was run in this session. Next: run M0 on the experiment machine.
 
 ## Scaffold validation (2026-10-05)
 

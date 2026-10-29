@@ -136,9 +136,9 @@ Expected deliverables:
 
 ## 10. Team and schedule from the proposal
 
-- Gauri Chabukswar: evaluation and validation.
-- Kaushal Satish Shelke: data pipeline and quantization.
-- Omkar Lashkare: experiment design, analysis, and writing.
+- Evaluation lead: evaluation and validation.
+- Pipeline lead: data pipeline and quantization.
+- Design lead: experiment design, analysis, and writing.
 
 | Date (2026) | Planned milestone |
 | --- | --- |
