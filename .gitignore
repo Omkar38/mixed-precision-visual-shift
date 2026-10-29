@@ -40,3 +40,6 @@ dist/
 
 # Editor settings
 .vscode/
+
+# Course submission artifacts (contain student names)
+submission/
