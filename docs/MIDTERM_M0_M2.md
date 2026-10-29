@@ -1,51 +1,75 @@
-# Midterm Progress: M0–M2 Environment, Pipeline Flow, M1 Validation Plan, and Risks
+# Midterm Progress: M0–M2 Environment, Component-Control Audit, and Data Pipeline
 
-**Author:** Gauri Chabukswar (evaluation and validation)
-**Written:** 2026-10-27
-**Scope:** milestones M0–M2 only, per the team's midterm plan.
+**Scope:** milestones M0–M2.
+**Revised:** 2026-10-29. First written 2026-10-27, before the CUDA audit completed.
 
-This is a progress and planning document, not a results document. **No
-experiment has been run.** Every statement below is labelled as one of:
+This is a progress report. **No task-accuracy experiment has been run and there
+is no Δ result.** Every statement is labelled as one of:
 
-- **Measured** — produced by code that actually ran (cited to its source).
-- **Implemented, not run** — code exists in the repository but has not executed on the target hardware.
+- **Measured** — produced by code that actually ran, cited to its source.
+- **Implemented, not run** — code exists but has not executed on target hardware or real data.
 - **Estimated** — planning figures with no evidential weight.
-- **Proposed** — design choices to be checked during the pilot and frozen before the main run.
+- **Proposed** — design choices to be checked in the pilot and frozen before the main run.
 
 Related documents: the protocol is in [EXPERIMENT_PROTOCOL.md](EXPERIMENT_PROTOCOL.md),
 the milestone plan in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), and the
-proposal in [PROPOSAL_SNAPSHOT.md](PROPOSAL_SNAPSHOT.md). The M0/M1 model audit is
-documented in [M1_MAC_FINDINGS.md](M1_MAC_FINDINGS.md), and the architecture and
-compute analysis in [PROJECT_DEEP_DIVE.md](PROJECT_DEEP_DIVE.md).
+proposal in [PROPOSAL_SNAPSHOT.md](PROPOSAL_SNAPSHOT.md). The full audit report is
+[M1_MAC_FINDINGS.md](M1_MAC_FINDINGS.md), the pipeline handoff is
+[M2_PIPELINE.md](M2_PIPELINE.md), the real-data validation is
+[M2_REAL_DATA_VALIDATION.md](M2_REAL_DATA_VALIDATION.md), and the architecture
+and compute analysis is [PROJECT_DEEP_DIVE.md](PROJECT_DEEP_DIVE.md).
+
+---
+
+## 0. Headline for this reporting period
+
+**M1 is complete and accepted.** The project's single largest scientific risk —
+whether the vision encoder, connector, and language backbone can be quantized
+*independently*, rather than a loader merely accepting a flag — has been
+resolved by a measured per-module audit of all eight configurations on an NVIDIA
+T4. Independent component control works. No model or quantizer fallback is
+needed.
+
+**M2 is implemented and validated on real POPE-COCO data.** The corruption,
+split, and annotation pipeline exists, is tested, and has been checked against
+the official POPE files and CelebA annotations.
+
+**What is still absent:** any accuracy number. No pilot has run, no real image
+has been through the model, and no severity, split size, or memory cap is
+frozen. The transfer-penalty measurement the project exists to produce has not
+started.
 
 ---
 
 ## 1. Milestone status at a glance
 
-| Milestone | Owner (proposal) | State |
-|---|---|---|
-| **M0** — environment and access | Team | Mac dev environment pinned and **measured** (Kaushal). CUDA environment **GPU-tested for FP16** on a Colab T4 (Gauri, 2026-10-27; see §2.1). |
-| **M1** — component-control audit | Kaushal (lead), Gauri (validation) | FP16 audit **implemented and CPU-load-tested**. FP16 load and one synthetic inference **GPU-tested** on a T4. NF4 construction and audit **not started on GPU**. Acceptance not met. |
-| **M2** — data and corruption pipeline | Kaushal (lead), Gauri (validation) | **Proposed** design below. No code yet. Does not need a GPU, so it can proceed in parallel with M1. |
+| Milestone | State |
+|---|---|
+| **M0** — environment and access | **Done.** Mac development environment and Colab CUDA environment both pinned and measured |
+| **M1** — component-control audit | **Accepted.** All 8 configurations audited on a T4; 331/331 linear modules converted as requested; savings exactly additive |
+| **M2** — data and corruption pipeline | **Implemented and unit-tested** (42 tests). POPE-COCO validated on real data; CelebA annotations validated, images not yet downloaded |
+| **M3** — pilot, cache, protocol freeze | Not started. Blocked only on team decisions listed in §7 |
+| **M4** — selection and statistics | Not started |
+| **M5** — main runs and report | Not started |
 
 ---
 
 ## 2. Environment setup (M0)
 
-The project needs two environments, because the quantizer we use
-(bitsandbytes NF4) requires an NVIDIA CUDA GPU and has no Apple Silicon backend.
+The project needs two environments, because bitsandbytes NF4 requires an NVIDIA
+CUDA GPU and has no Apple Silicon backend.
 
 | | Development environment | Experiment environment |
 |---|---|---|
-| Host | Apple M5 Mac | Google Colab, NVIDIA T4 GPU (free tier; L4 also accepted) |
-| Owner | Kaushal | Gauri |
+| Host | Apple Silicon Mac | Google Colab, NVIDIA Tesla T4 (free tier) |
 | Purpose | Write code, inspect modules, run unit tests, FP16 load on CPU | FP16 and NF4 GPU inference, memory measurement |
-| Python | 3.11.17 (Conda env `mpvs-m1`) | 3.13 (Colab default) |
-| PyTorch | 2.14.1 | 2.11.0+cu130 (Colab preinstalled, CUDA 13.0) |
-| Transformers | 4.52.4 | 4.52.4 (matched to Mac) |
+| Python | 3.11.17 (Conda env `mpvs-m1`) | 3.13.16 |
+| PyTorch | 2.14.1 | 2.11.0+cu130 (CUDA 13.0) |
+| Transformers | 4.52.4 | 4.52.4 (matched) |
 | Accelerate | 1.15.0 | 1.15.0 |
-| bitsandbytes | not available | 0.50.2 (installed, not yet exercised) |
-| State | **Measured**: FP16 checkpoint loads; `pytest` 7 passed; `pip check` clean | **Measured**: FP16 loads and generates on GPU (§2.1) |
+| bitsandbytes | not available | 0.50.2 |
+| Compute capability | n/a (`mps_available=False`) | 7.5 |
+| State | **Measured**: FP16 checkpoint loads on CPU; `pytest` clean | **Measured**: all 8 configurations built and ran (§4) |
 
 ### Pinned model
 
@@ -54,73 +78,60 @@ Model:     HuggingFaceTB/SmolVLM2-2.2B-Instruct
 Revision:  482adb537c021c86670beed01cd58990d01e72e4  (model and processor)
 ```
 
-Transformers 5.20.1 was tried on the Mac and **rejected** after its SmolVLM
-image-token merger failed. 4.52.4 is the recorded working version (Kaushal,
-see `DECISIONS.md` on `Kaushal-Commits`).
+Transformers 5.20.1 was tried and **rejected** after its SmolVLM image-token
+merger failed. 4.52.4 is the recorded working version on both hosts. This is a
+real compatibility finding, not a version preference: it was discovered by
+running the smoke test, not by reading release notes.
 
-### Reproducing the development environment
+### Reproducing
 
 ```bash
-conda env create -f environment-macos.yml   # on Kaushal-Commits
+# development
+conda env create -f environment-macos.yml
 conda activate mpvs-m1
 python -m pip install -e .
-python -m pytest -q
+PYTHONPATH=src python -m pytest -q
 python scripts/preflight.py --output artifacts/preflight-macos-m1.json
 ```
 
-### Reproducing the experiment environment
+For the experiment environment, open
+[`notebooks/m1_colab_cuda_nf4.ipynb`](../notebooks/m1_colab_cuda_nf4.ipynb) in
+Colab, select a T4 GPU, and run all cells. The notebook installs the project,
+runs FP16 / uniform-NF4 / language-NF4 as a feasibility gate, then runs all
+eight candidates in fresh subprocesses, preserves failure JSON, summarizes
+acceptance, and downloads the artifacts. Generated artifacts stay untracked.
 
-Open [`notebooks/m1_colab_cuda_nf4 gauri.ipynb`](<../notebooks/m1_colab_cuda_nf4 gauri.ipynb>)
-in Colab, select **Runtime → Change runtime type → T4 GPU** (free) or **L4 GPU**, and run all cells.
-The notebook:
+### 2.1 First GPU measurement: FP16 only (measured, 2026-10-27)
 
-1. Refuses to continue unless `nvidia-smi` reports a T4 or L4.
-2. Clones this branch and records the exact commit it ran from.
-3. Installs the pinned Transformers/Accelerate plus bitsandbytes, keeping Colab's CUDA PyTorch.
-4. Runs `scripts/preflight.py` and saves `artifacts/preflight-colab-{t4,l4}.json`.
-5. Loads the pinned FP16 checkpoint and checks the parameters really are FP16.
-6. Runs one synthetic image-question generation (greedy, 4 new tokens).
-7. Saves load time, inference time, and peak **allocated** and **reserved** GPU memory separately to `artifacts/m1-colab-{t4,l4}-fp16-smoke.json`.
-
-It deliberately does **not** build an NF4 model; that is the next M1 step.
-Generated artifacts stay out of tracked files.
-
-The first attempt failed at processor loading because `num2words` was missing
-from the Colab install list (the Mac environment already had it). It was added
-in commit `8b55db6`, and the second attempt succeeded.
-
-### 2.1 First GPU measurement: FP16 on a Colab T4 (measured, 2026-10-27)
-
-Run from `Gauri-Commits` at commit `8b55db6`, using the pinned model revision.
-The notebook saved `artifacts/m1-colab-t4-fp16-smoke.json` in the Colab session (not tracked); the values below are copied from its printed output.
+This was the project's first GPU evidence, recorded before the full audit and
+retained because it independently reproduces the FP16 reference.
 
 | Measurement | Value |
 |---|---:|
-| GPU | Tesla T4 (16 GB) |
-| PyTorch / CUDA | 2.11.0+cu130 / 13.0 |
-| Transformers / Accelerate / bitsandbytes | 4.52.4 / 1.15.0 / 0.50.2 |
-| Parameter dtype after load | `torch.float16` (checked) |
 | Load time (includes first download) | 143.1 s |
-| Peak allocated after load | 4,504,592,896 B (4.50 GB) |
-| Peak reserved after load | 4,735,369,216 B (4.74 GB) |
-| Synthetic inference time (first call, 4 new tokens) | 3.92 s |
-| Peak allocated during inference | 4,932,262,912 B (4.93 GB) |
-| Peak reserved during inference | 5,322,571,776 B (5.32 GB) |
-| Answer to "Is the image blue? Answer yes or no." on a solid blue image | `Yes.` |
+| Peak allocated after load | 4,504,592,896 B |
+| Peak reserved during inference | 5,322,571,776 B |
+| Synthetic inference (first call, 4 new tokens) | 3.92 s |
 
-What this shows:
+Two cross-checks fall out of this, and both passed:
 
-- **FP16 runs on a CUDA GPU** with the pinned model and Transformers 4.52.4. This is the first GPU evidence in the project.
-- **The GPU load matches the Mac storage measurement.** Peak allocated after load is only about 11 MB above Kaushal's measured 4,493,569,888 bytes of FP16 weights.
-- **FP16 fits within 8 GB for this input.** Peak reserved memory during inference was 5.32 GB, about 3.3 GB below 8 GiB. That supports the proposal's 8 GB assumption for the largest configuration, but only for one 384×384 synthetic image and 4 output tokens. Real images may be split into more image tokens and use more memory, so this must be re-checked in the pilot.
-- **Output format note for the parser.** The model answered `Yes.` with a capital and a full stop. The proposed strict parser (case-insensitive, optional final punctuation) would accept this. One synthetic answer says nothing about accuracy.
+- Peak allocated after load is ~11 MB above the measured 4,493,569,888 bytes of
+  FP16 weights — consistent with weights plus small runtime overhead.
+- 5,322,571,776 bytes is **4.957 GiB**, which is *exactly* the peak reserved
+  figure the independent full audit later recorded for the FP16/FP16/FP16
+  candidate (§4). Two separately written runs agree to the byte.
 
-What this does **not** show: anything about NF4, per-answer runtime (the
-3.92 s includes first-call warm-up), accuracy, or memory with real images.
+The first attempt at this notebook failed at processor loading because
+`num2words` was missing from the Colab install list. An earlier attempt also
+cloned a published commit that predated the M1 implementation and stopped at
+`pip install -e .`. Both were infrastructure failures that produced no evidence;
+the clone cell now fails early with a stale-branch diagnostic. Recording them
+matters because the protocol distinguishes infrastructure failures from model
+answers.
 
 ---
 
-## 3. Proposed pipeline flow
+## 3. Pipeline flow
 
 ### 3.1 End to end
 
@@ -145,11 +156,10 @@ flowchart TD
     E --> F["Delta + paired cluster bootstrap<br/>+ selection stability"]
 ```
 
-M0–M2 cover everything above the inference step: environments, the model
-and audit gate (M1), and the data, split, and corruption branch (M2).
-M3–M5 (pilot freeze, selection, statistics, main runs) come later.
+M0–M2 cover everything above the inference step. The audit gate has now been
+passed; M3–M5 (pilot freeze, caching, selection, statistics) come next.
 
-### 3.2 The M1 audit gate in detail
+### 3.2 The M1 audit gate
 
 ```mermaid
 flowchart TD
@@ -168,138 +178,245 @@ flowchart TD
     L -- "no" --> N["Scientific blocker: report it"]
 ```
 
----
-
-## 4. What M1 validation will tell us
-
-These are the **questions M1 will answer and the form of each answer** — not
-answers. Nothing in this section is a result.
-
-| # | Question | Output we will produce | Why it matters |
-|---|---|---|---|
-| 1 | Does the FP16 model run on a CUDA GPU? | Load time, inference time, peak allocated/reserved GPU memory | **Answered for FP16 on a T4 (§2.1).** Establishes the reference configuration |
-| 2 | Can each component be quantized independently? | Per-module audit JSON for each of the 8 configs | If not, there is no mixed-precision experiment; the protocol forbids relabelling global quantization as mixed precision |
-| 3 | Which configs are feasible? | Supported-candidate list with failure reasons | Defines the candidate set every selection strategy must share |
-| 4 | How much memory does each config really use? | Measured weight bytes, including NF4 metadata, per config | Memory caps must come from measurements, not flags |
-| 5 | Are any configs duplicates? | Effective signatures; merged list | Fewer distinct configs means less inference |
-| 6 | Which memory caps are usable? | Caps that admit at least two distinct feasible configs | Required before any selection comparison |
-
-### What we expect to see (estimated, to be replaced by measurements)
-
-The deep dive derives the following weight memory per config from the
-published model config, assuming standard NF4 storage (0.5 bytes/param plus
-block scales) with embeddings, norms, and `lm_head` left at FP16. The FP16
-total matches the **measured** 4,493,569,888 bytes. Everything else is
-**estimated**.
-
-| Vision | Connector | Language | Est. weight MB |
-|---|---|---|---:|
-| NF4 | NF4 | NF4 | ~1,556 |
-| NF4 | FP16 | NF4 | ~1,586 |
-| FP16 | NF4 | NF4 | ~2,147 |
-| FP16 | FP16 | NF4 | ~2,177 |
-| NF4 | NF4 | FP16 | ~3,871 |
-| NF4 | FP16 | FP16 | ~3,902 |
-| FP16 | NF4 | FP16 | ~4,462 |
-| FP16 | FP16 | FP16 | 4,493 (measured) |
-
-What validation needs to check against this table:
-
-- **Four tight pairs.** The connector is under 1% of the weights, so configs that differ only in the connector should sit about 30 MB apart. If the measurements do not show this pattern, the component mapping or the NF4 coverage is wrong.
-- **Large backbone gap.** The language backbone should account for the biggest jump (about 1.7 GB). This is what makes the backbone, not the vision side, decide which memory cap a config falls under.
-- **Caps that work.** If the estimates hold, a cap just above ~2.2 GB admits four configs and one near ~3.9 GB admits six, so the "at least two configs" requirement should be easy to meet.
-- **Possible duplicates.** If connector precision changes nothing measurable, eight configs become four effective ones. This must be shown by audit signatures and pilot data, not assumed.
-
-### How each M1 outcome changes the plan
-
-| If M1 shows… | Then we… |
-|---|---|
-| All 8 configs realized and runnable | Proceed with the full grid |
-| Some configs fail (e.g., a component cannot be targeted) | Use the disclosed supported subset; narrow the claims; no full factorial analysis |
-| Component control is impossible with bitsandbytes | Report a scientific blocker; discuss alternatives as a recorded protocol change, never a silent substitution |
-| FP16 does not fit or OOMs at the chosen resolution | Lower resolution or fall back to SmolVLM2-500M as a new protocol version |
-| NF4 is much slower than FP16 | Re-estimate compute with real timings before the pilot (see §6) |
+Every branch of this gate was exercised. The outcome was the left path at every
+decision point.
 
 ---
 
-## 5. M2 — data and corruption pipeline (proposed)
+## 4. What M1 measured
 
-M2 needs no GPU, so it does not have to wait for M1.
+All figures in this section are **measured** on a Tesla T4, each candidate
+loaded freshly from the same original checkpoint.
 
-### 5.1 Datasets
+### 4.1 Component control is real
 
-| | POPE-COCO | CelebA |
-|---|---|---|
-| Content | Everyday scenes and objects | Aligned face crops |
-| Question form | "Is there a {object} in the image?" | "Is this person {attribute}?" built from visible attributes |
-| Proposal size | One sampling variant: 3,000 questions over 500 images | Subset of 202,599 images, 40 attributes |
-| Group for splitting | Original COCO image | CelebA identity (and image) |
-| To decide in pilot | Which POPE variant (random / popular / adversarial) | Which visible attributes; balancing rule |
-| Access | COCO images fetched separately; checksum sources | Research-use agreement; keep images internal |
+| Component | Supported linear modules | Converted to NF4 | Exceptions |
+|---|---:|---:|---|
+| Vision encoder (`model.vision_model`) | 162 | 162 | none |
+| Connector (`model.connector`) | 1 | 1 | none |
+| Language backbone (`model.text_model`) | 168 | 168 | `lm_head` kept FP16 |
+| **Total** | **331** | **331** | one documented output-head exception |
 
-### 5.2 Order of operations (this order is the leakage guarantee)
+Across all eight audit reports: every requested NF4 module is a real
+`bitsandbytes Linear4bit` converted from `torch.nn.Linear`; every one reports
+NF4 storage, FP16 compute, uint8 quantized storage, and no double quantization;
+every requested FP16 component has zero quantized modules; `lm_head` stayed
+FP16; every mismatch list is empty; no unclassified module was quantized; and
+all eight effective signatures are distinct.
+
+This is the sentence the protocol demanded: **the audit validates independent
+component control, and it is not global quantization relabelled as mixed
+precision.**
+
+### 4.2 Measured weight storage
+
+| Vision | Conn. | Backbone | Weight bytes | GiB | Peak reserved GiB | Gen. s |
+|---|---|---|---:|---:|---:|---:|
+| NF4 | NF4 | NF4 | 1,556,898,080 | 1.450 | 2.283 | 3.98 |
+| NF4 | FP16 | NF4 | 1,587,421,408 | 1.478 | 2.283 | 4.05 |
+| FP16 | NF4 | NF4 | 2,147,801,504 | 2.000 | 2.600 | 3.90 |
+| FP16 | FP16 | NF4 | 2,178,324,832 | 2.029 | 2.627 | 3.89 |
+| NF4 | NF4 | FP16 | 3,872,143,136 | 3.606 | 4.182 | 3.98 |
+| NF4 | FP16 | FP16 | 3,902,666,464 | 3.635 | 4.213 | 3.85 |
+| FP16 | NF4 | FP16 | 4,463,046,560 | 4.157 | 4.781 | 4.01 |
+| FP16 | FP16 | FP16 | 4,493,569,888 | 4.185 | 4.957 | 3.78 |
+
+All eight returned a successful deterministic generation on a synthetic
+384×384 image. **This checks execution viability only** — it is not accuracy,
+robustness, real-image, or throughput evidence.
+
+### 4.3 The strongest check: savings are exactly additive
+
+Holding the other two components at FP16, moving one component to NF4 saved:
+
+| Component | Bytes saved |
+|---|---:|
+| Vision encoder | 590,903,424 |
+| Connector | 30,523,328 |
+| Language backbone | 2,315,245,056 |
+
+```
+4,493,569,888 − 590,903,424 − 30,523,328 − 2,315,245,056 = 1,556,898,080
+```
+
+That is exactly the measured all-NF4 total. Perfect additivity means the three
+component controls do not contaminate each other — independently confirming
+§4.1 at the storage level, by a different route.
+
+### 4.4 Storage is fully accounted for
+
+For the all-NF4 candidate:
+
+| Category | Bytes |
+|---|---:|
+| Parameter storage | 1,429,194,464 |
+| Persistent buffers | 128 |
+| Exposed quantization metadata | 127,703,488 |
+| Total | 1,556,898,080 |
+
+127,703,488 bytes across 2,042.9 M quantized parameters is **0.0625
+bytes/param** — exactly one FP32 `absmax` per 64-value block, consistent with
+double quantization being off. Nothing in the storage total is unexplained.
+
+### 4.5 The prediction held
+
+The architecture analysis derived these totals from the published
+`config.json` *before* any GPU was available. Every candidate landed within
+1.4 MB of its measured value, a maximum error of **0.090%**. The storage model
+is therefore validated, and the memory cost of future candidate changes can be
+computed without spending GPU time.
+
+### 4.6 Usable memory caps
+
+| Cap (bytes) | Eligible candidates | Vision varies | Backbone varies |
+|---|---:|---|---|
+| 1,587,421,408 | 2 | no | no |
+| 2,147,801,504 | 3 | yes | no |
+| **2,178,324,832** | **4** | **yes** | no |
+| 3,872,143,136 | 5 | yes | yes |
+| **3,902,666,464** | **6** | **yes** | **yes** |
+
+M1 acceptance required only one cap admitting two distinct candidates, and
+1,587,421,408 bytes satisfies it. But it is the **weakest** scientific choice:
+its two candidates differ *only* in connector precision, which is 0.9% of the
+weights. The caps admitting four and six candidates vary vision and backbone
+precision and are the useful comparisons. **Proposed**, not frozen.
+
+---
+
+## 5. M2 — data and corruption pipeline
+
+M2 needs no GPU and proceeded in parallel with M1.
+
+### 5.1 Order of operations (this order is the leakage guarantee)
 
 1. Build normalized records: `dataset, original_image_id, identity_id, question_id, question, label`.
 2. **Split first**, by whole group, into pilot / development / test with a fixed seed. Save manifests with checksums.
 3. **Then** generate corrupted variants. Every variant inherits its original image's split.
-4. Never let a group appear in two splits, even if that means the split sizes are not exactly round.
+4. Never let a group appear in two splits, even if split sizes end up uneven.
 
-### 5.3 Corruptions (proposed, severities frozen after pilot)
+Grouping is correct by construction: the split group resolves to the CelebA
+identity and to the POPE original image, so no identity and no image can
+straddle a split.
 
-| Corruption | Proposed implementation | Severities |
-|---|---|---|
-| Darkness | Multiply RGB intensity by a factor below 1 | 3 levels, chosen from pilot answerability checks |
-| Gaussian blur | Documented radius/kernel convention, one library only | 3 levels, chosen the same way |
+### 5.2 POPE-COCO: validated on real data
 
-Together with the clean images, that gives 7 conditions per image. Transforms
-must be deterministic and applied at the same point relative to resizing for
-every config. Severities are chosen from **pilot data only**, never from test
-accuracy.
+The three official POPE COCO files and the 500 referenced COCO val2014 images
+were downloaded and checked. **Measured**, for every sampling variant:
 
-### 5.4 Validation checks I will write for M2
+| Check | Result |
+|---|---|
+| Questions | 3,000 |
+| Distinct images | 500 |
+| Yes/no balance | 1,500 / 1,500 |
+| Questions per image | 6 |
+| Duplicate question IDs | none |
+| Missing images | none |
+| Loader defaults vs. schema | matched, no code change needed |
+| Normalization | deterministic |
 
-These come under evaluation and validation, my role in the proposal. All of
-them run on clearly labelled synthetic fixtures.
+### 5.3 CelebA: annotations validated, images pending
 
-- **No leakage:** no original image ID or CelebA identity appears in more than one split.
-- **Variant inheritance:** every corrupted variant has the same split as its original image.
-- **Question grouping:** every question about an image stays in that image's split.
-- **Determinism:** the same seed and inputs give byte-identical manifests and transformed images.
-- **Pilot disjointness:** pilot groups never appear in development or test.
-- **Label balance:** report the yes/no ratio per split; record any imbalance caused by whole-group assignment instead of silently rebalancing.
+Attribute and identity files match their published MD5 values. **Measured**:
+202,599 images, 40 attributes, 10,177 identities, and every image has an
+identity.
 
-Acceptance (from `IMPLEMENTATION_PLAN.md`): no group crosses splits, all
-variants inherit their group, and manifests and transforms are reproducible.
+615 identities carry inconsistent `Male` labels across their images. This is
+dataset label noise to **document, not repair** — silently correcting source
+labels would be an undisclosed change to the benchmark.
+
+The images themselves are not yet downloaded, so no CelebA split is final.
+
+### 5.4 Validation results
+
+Trial splits on POPE adversarial and CelebA Eyeglasses (placeholder seed):
+**zero leakage, byte-identical on rerun**. Trial POPE pilot corruptions: 420
+variants, completeness valid, **0 pixel mismatches across two renders**.
+
+Two real defects were found by validation review and fixed:
+
+1. `validate_variant_inheritance` reported `valid: true` when some
+   clean/darkness/blur variants were **missing**, which silently breaks paired
+   evaluation. It now reports missing variants, inconsistent corruption specs,
+   and undeclared specs, and the CLI passes declared specs so a condition
+   dropped for every question is also caught.
+2. Splits did not detect **the same image bytes appearing under two image IDs
+   or two identities** in different splits. Groups sharing a source-image
+   checksum are now merged into one indivisible unit, and the validator reports
+   checksum leakage.
+
+Nine synthetic-fixture tests were added; eight of them fail against the
+previous code. The second defect is the dangerous class — a leakage hole that
+raises no error and would have invalidated the study silently.
+
+A third defect was found in the corruption specification and fixed:
+`CorruptionSpec.value` was not normalized, so `2` and `2.0` produced different
+signature digests and `True` was accepted as a blur radius (`bool` subclasses
+`int`). One transform could hold three distinct cache keys. Since cache keys
+must include the image transformation, this was a correctness defect. `value`
+is now coerced to `float`, booleans are rejected, and two regression tests
+cover it.
+
+**Command:** `PYTHONPATH=src python3 -m pytest -q` → **42 passed** (Python
+3.13, macOS, CPU). Synthetic fixtures only; synthetic success is not research
+evidence.
 
 ---
 
-## 6. Problems we might face
+## 6. Risks, with current status
 
-| # | Problem | Why it is a risk | Mitigation |
+| # | Risk | Status | Mitigation |
 |---|---|---|---|
-| 1 | **GPU access** | NF4 needs CUDA. The Mac cannot run it, so all of M1's NF4 work depends on Colab or another NVIDIA machine. | Colab notebook works on the free T4 (§2.1). Keep the Mac for code and tests. Consider renting a GPU if Colab access is unreliable. |
-| 2 | **Colab session limits** | Sessions can disconnect or time out, and GPU availability and usage quotas are limited. A long run can be lost. | Batch size 1, one config per process, and a **resumable cache** (M3) so a disconnect loses at most the current item. Save artifacts to Drive. |
-| 3 | **Compute time** | Proposal design is ~56,000 test answers; including dev and pilot, about **~95,000** (estimated). An early estimate of **15–40 GPU-hours** assumed 0.3–1.0 s/answer; the only measured figure so far is a cold 3.78–4.05 s/answer, which would imply up to ~106 GPU-hours. NF4 can be *slower* than FP16 because weights are dequantized on the fly. | Measure real per-answer time on the GPU in M1 (the T4 smoke test is first-call only) and replace the estimate. Fallbacks in order: 2 severities instead of 3 (−29% conditions), merge duplicate configs, then SmolVLM2-500M. |
-| 4 | **Library compatibility** | Transformers 5.x already broke SmolVLM image-token merging. bitsandbytes must match the CUDA/PyTorch build, and Colab's preinstalled PyTorch can change without notice. | Pin Transformers 4.52.4; record every package version in the notebook's JSON; lock the CUDA environment once it works. |
-| 5 | **Component control may not work** | The loader might quantize modules we did not ask for, or skip ones we did. A config the loader accepts is not necessarily the config we wanted. | M1 audit gate (§3.2) checks every module. If it fails, we report a blocker rather than working around it. |
-| 6 | **8 GB memory assumption** | The proposal assumed an 8 GB GPU; activations and the KV cache add to weight memory and could cause out-of-memory errors. | First measurement is reassuring: FP16 peaked at 5.32 GB reserved on a synthetic image (§2.1). Re-check with real images during the pilot, and keep reporting weight bytes and peak GPU memory separately. |
-| 7 | **Dataset access and terms** | CelebA requires agreeing to research-use terms and cannot be redistributed. COCO images must be fetched separately. | Download only what POPE references (~500 images), keep raw data out of Git, commit only permitted split identifiers. |
-| 8 | **Severity window** | Too mild and nothing changes; too severe and every config fails. Either way Δ ≈ 0 for an uninteresting reason. | The pilot must show accuracy dropping as severity increases without collapsing to chance; choose levels on pilot data only. |
-| 9 | **Selection noise** | With a small dev set, the best config may change at random, so Δ would measure noise. | Report how often each config is selected under development bootstrap, alongside Δ. |
-| 10 | **Schedule** | The proposal's protocol-freeze date (Oct 12) has passed, and the Oct 19 main-run date assumed M1 was done. | Run M2 in parallel with M1 now; aim to finish the FP16 GPU run and NF4 audit first, since they are the critical path. |
+| 1 | **GPU access** | **Resolved.** Free-tier Colab T4 ran the full audit | Keep the Mac for code and tests; T4 is the known-working path |
+| 2 | **Component control may not work** | **Resolved.** 331/331 modules, zero mismatches, additive savings | Keep the audit as a gate whenever the grid or library versions change |
+| 3 | **Throughput** | **Open — now the top risk.** Only measurement is 3.78–4.05 s/answer, a cold first call including warm-up | At 4 s, ~95,000 answers is ~106 GPU-hours; at 1 s, ~26. Measure steady state in the pilot before committing |
+| 4 | **Blur severity is not comparable across domains** | **Open — newly identified.** Gaussian radius is in absolute pixels; a CelebA crop is ~178 px wide and a COCO image ~640 px, so one radius is far stronger on faces | Define radius relative to the short edge, or declare severities per-domain and never compare a raw severity across domains |
+| 5 | **Double quantization shifts every cap** | **Open decision.** Currently off, costing ~128 MB of metadata | Freeze before the pilot alongside the cap definitions |
+| 6 | **Colab session limits** | Open | Batch size 1, one config per process, resumable cache so a disconnect loses at most one item. At the pessimistic throughput, free tier is not viable — budget a paid runtime |
+| 7 | **Severity window** | Open | The pilot must show accuracy declining with severity without collapsing to chance; choose levels on pilot data only |
+| 8 | **Connector result is ambiguous** | Open by construction | The connector is a single 21 M-param layer, so a null cannot distinguish "no effect" from "lever too small". Report the weaker reading |
+| 9 | **Selection noise** | Open | Report selection frequencies under development bootstrap alongside Δ |
+| 10 | **Invalid answers bias the result** | Open | Count invalid as incorrect, freeze the parser before selection, report invalid rate per configuration |
+| 11 | **8 GB assumption** | Largely resolved | Largest configuration peaked at 4.957 GiB with one synthetic image; re-check with real images in the pilot |
+| 12 | **Dataset access and terms** | Open | CelebA images stay internal under its research-use agreement; release code and split identifiers only |
+| 13 | **Schedule** | Open | The proposal's Oct 12 protocol freeze and Oct 19 main-run dates have passed. M1 and M2 are now done, so the critical path is the pilot |
 
 ---
 
 ## 7. Next actions
 
-| Action | Owner | Needs GPU |
-|---|---|---|
-| ~~Run the Colab FP16 smoke-test notebook~~ Done on T4, 2026-10-27 (§2.1) | Gauri | Yes |
-| Implement selective NF4 replacement and run the audit gate for all 8 configs | Pipeline lead, validated by evaluation lead | Yes |
-| Write the M2 leakage and determinism tests with synthetic fixtures | Evaluation lead | No |
-| Implement POPE/CelebA loaders, splits, and corruptions | Pipeline lead | No |
-| Choose the POPE variant and CelebA attributes; record in `DECISIONS.md` | Design lead, with team | No |
+Decisions first — none of them need a GPU, and the pilot cannot be frozen
+without them:
 
-Nothing here should be reported as GPU-tested or as an experimental result
-until the corresponding run has actually completed and its outputs are
-recorded.
+| Action | Needs GPU |
+|---|---|
+| Freeze NF4 double quantization on or off | No |
+| Decide blur severity units: absolute pixels or relative to image size | No |
+| Choose the POPE sampling variant and the CelebA attribute set | No |
+| Approve the identity-capped balanced CelebA sampling rule, split sizes, and seed | No |
+| Download CelebA images under the research-use agreement; build final manifests | No |
+| Run the human answerability review on corrupted pilot variants | No |
+| **Measure steady-state throughput**, then choose severities and caps | Yes |
+| Implement the resumable prediction cache before any scaled run | Yes |
+
+Nothing above should be reported as GPU-tested or as an experimental result
+until the corresponding run has completed and its outputs are recorded.
+
+---
+
+## 8. Honest summary
+
+The infrastructure phase of this project is finished and it is in better shape
+than the schedule suggests. Component control — the assumption the whole study
+rests on — is not assumed but measured, at the level of all 331 individual
+linear modules, with an independent additivity cross-check and an exact
+match to a prediction made beforehand. The data pipeline is implemented, and
+validation review has already caught three defects, one of which was a silent
+leakage hole.
+
+What remains is the experiment itself, and it has not started. There is no
+accuracy figure, no Δ, and nothing frozen. The honest position is that the
+project is roughly two weeks behind the proposal's timeline on *results* while
+being ahead of where most projects are on *verification*, and that the single
+number which decides whether the full design is affordable — steady-state
+inference throughput — is still unmeasured.

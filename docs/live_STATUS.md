@@ -123,13 +123,13 @@ Do not freeze severities or split sizes from synthetic fixtures.
 - Expanded the module audit to record linear/source classes, stored dtype, quantization type/state, compute dtype, double-quantization state, quantized storage dtype, known exceptions, mismatched modules, and unclassified quantized modules. Requested loader settings do not count as validation; `matches_request` comes from the realized modules.
 - Expanded memory accounting to include unique tensor storage reachable from bitsandbytes parameter `quant_state` metadata without double-counting parameter or buffer storage.
 - Added isolated grid summarization: successful inference candidates are deduplicated by effective signature, sorted by measured total weight storage, and used to enumerate caps admitting at least two distinct configurations.
-- Reworked `notebooks/m1_colab_cuda_nf4 kaushal.ipynb` to install the project, run FP16/uniform-NF4/language-NF4 as the feasibility gate, run all eight candidates in fresh subprocesses, preserve failure JSON, summarize M1 acceptance, and download a zip of the ignored artifacts.
+- Reworked `notebooks/m1_colab_cuda_nf4.ipynb` to install the project, run FP16/uniform-NF4/language-NF4 as the feasibility gate, run all eight candidates in fresh subprocesses, preserve failure JSON, summarize M1 acceptance, and download a zip of the ignored artifacts.
 - Validation on the Mac development environment: `conda run -n mpvs-m1 python -m pytest -q` passed 14 tests; notebook JSON, Python compilation, wheel construction, unsupported-candidate JSON, and Git whitespace checks passed. This is implemented and unit-tested, not GPU-tested. M1 acceptance remains unmet until the T4 outputs confirm at least two distinct feasible candidates at a measured cap.
 - First revised-notebook attempt on a T4 checked out the still-published commit `8d9fee5` and stopped at `pip install -e .` because that revision predates the uncommitted `pyproject.toml` and M1 implementation. This was a publication/infrastructure failure and produced no NF4 evidence. The clone cell now fails early with a clear stale-branch diagnostic when required project files are absent.
 
 ## 2026-10-22 — Gauri CUDA smoke-test contribution (historical; superseded below)
 
-- Created `notebooks/m1_colab_cuda_nf4 gauri.ipynb` on `Gauri-Commits`, branched from `main`.
+- Created the earlier smoke-test notebook on `Gauri-Commits`, branched from `main`.
 - The notebook checks for an L4, clones this branch, installs CUDA-side Python dependencies including bitsandbytes while retaining Colab's CUDA-enabled PyTorch, runs `scripts/preflight.py`, loads the pinned FP16 checkpoint, runs one synthetic inference, and records separate peak allocated/reserved GPU memory for loading and generation.
 - The notebook does not construct an NF4 model or claim GPU validation. It must be run on a Colab L4 after the branch is published; no Colab/GPU run has been performed yet.
 - Next: publish `Gauri-Commits`, run the notebook on an L4, and retain the generated preflight and smoke-test JSON artifacts outside tracked files.
@@ -153,7 +153,7 @@ Commands also run: `conda create -n mpvs-m1 python=3.11 pip -y`; dependency inst
 - Added `docs/MIDTERM_M0_M2.md`, scoped to M0–M2 as agreed by the team: environment setup (Mac dev environment from `Kaushal-Commits`, Colab L4 environment from this branch), a proposed end-to-end flowchart and M1 audit-gate flowchart, the questions M1 validation will answer and how each outcome changes the plan, the proposed M2 data/corruption pipeline with the leakage and determinism checks to be written, and a risk table covering compute, Colab limits, library compatibility, data access, and schedule.
 - Every figure is labelled measured, implemented-not-run, estimated, or proposed. The per-config memory table is the design lead's estimate from `docs/PROJECT_DEEP_DIVE.md`; only the FP16 total (4,493,569,888 bytes) is measured (Kaushal, Mac CPU load).
 - Documentation only. No code, model download, GPU run, dataset access, or experiment was performed. The Colab notebook has still not been run.
-- Next: run `notebooks/m1_colab_cuda_nf4 gauri.ipynb` on an L4 and record its measurements here; then write the M2 synthetic-fixture leakage tests.
+- Next: run the earlier smoke-test notebook on an L4 and record its measurements here; then write the M2 synthetic-fixture leakage tests.
 
 ## 2026-10-27 — Gauri first GPU run: FP16 smoke test on Colab T4
 
@@ -204,6 +204,42 @@ Commands also run: `conda create -n mpvs-m1 python=3.11 pip -y`; dependency inst
   no severity or cap frozen, no accuracy measurement of any kind.
 - Next: freeze double quantization and blur severity units, then run the M3
   pilot to measure steady-state throughput before committing to the full sweep.
+
+## 2026-10-29 — Midterm rewrite and repository cleanup
+
+- Rewrote [MIDTERM_M0_M2.md](MIDTERM_M0_M2.md). It was written on 2026-10-27,
+  before the audit completed, so its central section predicted what M1 would
+  show. That section now reports the measured results: 331/331 linear modules
+  converted as requested (162 vision, 1 connector, 168 backbone), the measured
+  per-candidate storage table, the exact additivity cross-check, the fully
+  accounted metadata at 0.0625 bytes per quantized parameter, and the usable
+  cap thresholds. Milestone states, the risk table, and next actions were
+  updated; risks 1 and 2 are now resolved and throughput is the top open risk.
+- Noted a reproducibility cross-check that had not been drawn out before: the
+  standalone FP16 smoke test recorded 5,322,571,776 bytes peak reserved, which
+  is exactly the 4.957 GiB the independent full audit later recorded for the
+  FP16/FP16/FP16 candidate. Two separately written runs agree to the byte.
+- Corrected [README.md](../README.md), which still described the repository as a
+  scaffold with no measured results, and removed its reference to the deleted
+  `docs/SOURCES.md`. Added the newer documents to its index.
+- Repository cleanup: untracked `.vscode/settings.json` and added `.vscode/` to
+  `.gitignore`; removed the superseded FP16 smoke-test notebook, which remains
+  available on its own branch; renamed the audit notebook to
+  `notebooks/m1_colab_cuda_nf4.ipynb`, dropping a personal name and a space from
+  the filename, and repointed every reference.
+- Deleted two stale local branches. One had been force-replaced upstream and the
+  other was merged.
+- Checked every local Markdown link across the repository: 0 broken.
+- Command: `PYTHONPATH=src python3 -m pytest -q` → **42 passed**. Rebuilt both
+  PDFs (deep dive 11 pages, midterm 9 pages) with no missing glyphs.
+- Attribution note recorded for the team: the core implementation
+  (`model.py`, `quantization.py`, `memory.py`, `cli.py`, `data/records.py`, and
+  the majority of `splits.py` and `corruptions.py`), the CUDA audit, the M2
+  pipeline, and the M2 test suite are the pipeline lead's work. The validation
+  fixes and the real-data validation are the evaluation lead's. Both are
+  required; neither can be dropped.
+- Not done: still no dataset download beyond POPE, no CelebA images, no pilot,
+  no inference on real data, no accuracy figure, nothing frozen.
 
 ## Handoff rule
 

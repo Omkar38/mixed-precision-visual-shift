@@ -37,3 +37,6 @@ dist/
 *.pth
 *.bin
 *.log
+
+# Editor settings
+.vscode/
