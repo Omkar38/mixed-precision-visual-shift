@@ -7,6 +7,7 @@ from mpvs.data.celeba import load_celeba_annotations
 from mpvs.data.images import attach_source_image_checksums
 from mpvs.data.manifests import read_jsonl, write_jsonl_atomic, write_jsonl_immutable
 from mpvs.data.pope import load_pope_jsonl
+from mpvs.data.records import NormalizedRecord, validate_normalized_records
 
 
 def test_pope_loader_normalizes_explicit_variant_and_fields(tmp_path):
@@ -85,3 +86,25 @@ def test_immutable_manifest_allows_identical_rerun_but_rejects_replacement(tmp_p
     assert write_jsonl_immutable(output, [{"id": 1}]) == first_hash
     with pytest.raises(FileExistsError, match="immutable manifest"):
         write_jsonl_immutable(output, [{"id": 2}])
+
+
+def test_normalized_validation_reports_duplicate_image_bytes():
+    records = [
+        NormalizedRecord(
+            dataset="celeba",
+            original_image_id=f"{index}.jpg",
+            image_relpath=f"{index}.jpg",
+            identity_id=str(index),
+            question_id=f"q-{index}",
+            question="Is this person smiling?",
+            label="yes",
+            attribute="Smiling",
+            source_image_sha256="a" * 64,
+        )
+        for index in range(2)
+    ]
+    report = validate_normalized_records(records, require_image_checksums=True)
+    assert report["valid"] is True
+    assert report["duplicate_source_image_checksums"] == [
+        {"sha256": "a" * 64, "image_ids": ["0.jpg", "1.jpg"]}
+    ]

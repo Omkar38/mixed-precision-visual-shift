@@ -7,6 +7,8 @@ from mpvs.data.cli import (
     create_splits,
     expand_manifest_variants,
     normalize_pope,
+    sample_celeba,
+    verify_manifest_images,
     validate_splits,
 )
 from mpvs.data.manifests import read_jsonl, write_jsonl_immutable
@@ -100,3 +102,76 @@ def test_m2_split_validate_and_expand_cli_handlers(tmp_path):
         )
     ) == 0
     assert len(read_jsonl(variants)) == 2 * len(read_jsonl(output_dir / "pilot.jsonl"))
+
+
+def test_m2_sample_celeba_writes_balanced_immutable_manifest(tmp_path):
+    records = [
+        NormalizedRecord(
+            dataset="celeba",
+            original_image_id=f"{label}-{index}.jpg",
+            image_relpath=f"{label}-{index}.jpg",
+            identity_id=f"{label}-{index}",
+            question_id=f"q-{label}-{index}",
+            question="Is this person smiling?",
+            label=label,
+            attribute="Smiling",
+        )
+        for label in ("yes", "no")
+        for index in range(3)
+    ]
+    source = tmp_path / "celeba-normalized.jsonl"
+    write_jsonl_immutable(source, (record.to_dict() for record in records))
+    output = tmp_path / "celeba-sampled.jsonl"
+    args = argparse.Namespace(
+        input=source,
+        attribute=["Smiling"],
+        per_label=2,
+        seed=590,
+        output=output,
+        allow_missing_image_checksums=True,
+    )
+    assert sample_celeba(args) == 0
+    assert sample_celeba(args) == 0
+    sampled = read_jsonl(output)
+    assert len(sampled) == 4
+    assert {label: sum(row["label"] == label for row in sampled) for label in ("yes", "no")} == {
+        "yes": 2,
+        "no": 2,
+    }
+    metadata = json.loads(
+        output.with_suffix(".jsonl.metadata.json").read_text(encoding="utf-8")
+    )
+    assert metadata["sampling_spec"]["seed"] == 590
+    assert metadata["validation"]["valid"] is True
+
+
+def test_m2_verify_images_attaches_checksums_to_a_sample(tmp_path):
+    image_root = tmp_path / "images"
+    image_root.mkdir()
+    Image.new("RGB", (2, 2), (10, 20, 30)).save(image_root / "selected.jpg")
+    source = tmp_path / "sample-unverified.jsonl"
+    write_jsonl_immutable(
+        source,
+        [
+            NormalizedRecord(
+                dataset="celeba",
+                original_image_id="selected.jpg",
+                image_relpath="selected.jpg",
+                identity_id="person-1",
+                question_id="q-selected",
+                question="Is this person smiling?",
+                label="yes",
+                attribute="Smiling",
+            ).to_dict()
+        ],
+    )
+    output = tmp_path / "sample-verified.jsonl"
+    assert verify_manifest_images(
+        argparse.Namespace(input=source, image_root=image_root, output=output)
+    ) == 0
+    row = read_jsonl(output)[0]
+    assert len(row["source_image_sha256"]) == 64
+    metadata = json.loads(
+        output.with_suffix(".jsonl.metadata.json").read_text(encoding="utf-8")
+    )
+    assert metadata["validation"]["missing_source_image_checksums"] == []

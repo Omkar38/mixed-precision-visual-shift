@@ -1,36 +1,123 @@
 # Current status
 
-Updated: 2026-10-28.
+Updated: 2026-11-19.
 
-## Completed
+## Simple summary
 
-- Read the current proposal's Final tab.
-- Created the research context, shared agent instructions, implementation plan, and draft protocol.
-- Added a dependency-free environment inventory script.
-- Created a local Git repository using Omkar's author and committer identity.
-- Published the repository at `https://github.com/Omkar38/mixed-precision-visual-shift`.
-- Completed the M1 CUDA/NF4 audit for all eight distinct component allocations
-  on a Tesla T4; the machine-readable summary reports acceptance.
-
-## Not completed
-
-- Real-data POPE-COCO/CelebA schema and access validation.
-- Real-data split generation, balance review, and leakage validation.
-- Pilot selection of corruption severities, split sizes, and final memory caps.
-- Inference/evaluation implementation.
-- Experimental results or report figures.
+- M1 is complete. All eight FP16/NF4 model configurations were checked on a
+  Tesla T4.
+- The M2 data-processing and placeholder CelebA sampling code is implemented
+  and has 48 passing tests.
+- POPE-COCO annotations and all 500 source images were validated.
+- CelebA annotations and identity files were validated, but the CelebA images
+  were not downloaded or checked.
+- Trial splits passed the leakage and determinism checks. They are not final
+  splits.
+- No corruption severity, split size, seed, CelebA sample, or experimental
+  memory cap is frozen.
+- M3 inference, M4 analysis, and the main experiment have not started.
 
 ## Current milestone
 
-M2 — data and corruption pipeline (implementation complete on synthetic fixtures;
-real-data validation pending).
+M2 Phase A is complete. Phase B (final manifests) and Phase C (human pilot
+review) are not complete.
 
-## Next task
+## What is complete, partial, and not started
 
-Gauri should validate the M2 loaders against authorized POPE-COCO and CelebA
-files, record source schemas/checksums/counts, propose explicit dataset choices,
-and run the group-leakage, determinism, balance, and pilot-answerability checks.
-Do not freeze severities or split sizes from synthetic fixtures.
+| Work | Status | Meaning |
+| --- | --- | --- |
+| M1 model audit | Complete | Eight distinct configurations loaded, matched the request, and passed synthetic inference. |
+| POPE-COCO validation | Complete | Real annotations and 500 images were checked. |
+| CelebA validation | Partial | Annotation and identity files were checked; images were not checked. |
+| Final splits and balance | Partial | Trial splits passed; final balanced manifests do not exist. |
+| CelebA sampler | Implemented, synthetic-tested | Exact balance and identity/image limits pass tests; it has not run on checked CelebA images. |
+| Corruption pilot | Partial | Trial images were deterministic; no human answerability review was completed. |
+| Final memory caps | Not selected | Candidate memory sizes are measured, but experimental caps are not frozen. |
+| M3 inference/evaluation | Not started | Only the M1 synthetic smoke test exists. |
+| M4 statistics and main results | Not started | There are no dataset accuracy or delta results. |
+
+## Example choices for team discussion only
+
+These are examples, not approved settings:
+
+- POPE variant: `adversarial`.
+- CelebA attributes: `Eyeglasses`, `Wearing_Hat`, and `Smiling`.
+- Split seed: `590`.
+- POPE split example: 17 pilot images (102 questions), 399 development images
+  (2,394 questions), and 84 test images (504 questions). Whole images must stay
+  together.
+- CelebA sample example: 400 questions per attribute, with 200 yes and 200 no.
+  A target split could be about 100 pilot, 600 development, and 500 test
+  questions. Exact counts may change because one identity cannot cross splits.
+- POPE corruption candidates already tried: darkness factors `0.60`, `0.35`,
+  and `0.15`; blur radii `1.5`, `3`, and `6`. These values are not approved.
+  CelebA may need smaller blur radii because its images are smaller.
+- Memory-cap examples from measured M1 storage:
+  `2,178,324,832` bytes admits four candidates,
+  `3,902,666,464` bytes admits six candidates, and
+  `4,493,569,888` bytes admits all eight candidates.
+  Caps must be chosen before looking at comparative test accuracy.
+
+## How to continue
+
+1. The team approves the POPE variant, CelebA attributes, CelebA sample size,
+   balance rule, split seed, and target split sizes.
+2. Record those choices in `docs/DECISIONS.md`. Keep them marked proposed until
+   the pilot passes.
+3. Download the authorized CelebA images. Check file count, image existence,
+   checksums, duplicates, and visible labels. Do not commit the images.
+4. Run the deterministic CelebA sampler with the approved values. Its code and
+   tests are ready, but the current example values are placeholders.
+5. Create new final-candidate manifests. Run leakage, balance, checksum, and
+   determinism checks on both datasets. Do not reuse the trial manifests as
+   final evidence.
+6. Create pilot corruption variants. Review them by eye without model answers.
+   Select whole severity levels; do not remove examples because the model gets
+   them wrong.
+7. Freeze the accepted dataset choices, manifests, corruption values, and file
+   hashes in `docs/DECISIONS.md` and the experiment protocol.
+8. Choose candidate memory caps from the measured M1 values before viewing test
+   accuracy. Use caps that admit at least two distinct configurations.
+9. Implement M3: fixed prompt, strict yes/no parser, prediction records, atomic
+   cache, resume support, and clear failure states.
+10. Run the disjoint pilot on real images. Measure accuracy, invalid answers,
+    runtime, and peak GPU memory. Freeze the final prompt, parser, caps, and run
+    settings.
+11. Only after the protocol is frozen, run the main experiment and M4 analysis.
+    Use development data for selection and untouched test data for final results.
+
+## Detailed work log
+
+## 2026-11-19 — Placeholder CelebA sampler and low-level handoff
+
+- Added `m2-sample-celeba` with explicit attributes, per-label count, and seed.
+- The sampler creates exact yes/no balance per attribute, uses at most one image
+  per identity per attribute, selects one question per image, and avoids
+  duplicate image bytes when checksums are present.
+- Final sampling requires image checksums. Annotation-only testing requires the
+  explicit `--allow-missing-image-checksums` flag.
+- Added duplicate-image checksum reporting to normalized-record validation.
+- Added `m2-verify-images` so an annotation-only sample can be checked after
+  extracting only its selected images. This avoids a full 202,599-image
+  extraction while still requiring checksums before split creation.
+- Added `notebooks/m2_celeba_colab_temp.ipynb`. It keeps the official ZIP in a
+  private Drive folder, checks the published MD5 values, inspects all ZIP image
+  entries, extracts only the placeholder sample, verifies it, creates trial
+  splits and pilot variants, and exports small private artifacts.
+- The official Google Drive files later hit their public download quota. The
+  notebook now tries the clearly labelled Freie Universität Berlin academic
+  mirror after an official-download failure. Every fallback file must match the
+  published torchvision MD5 before it is copied to private Drive storage. This
+  path is implemented but has not yet been run; the images remain unvalidated.
+- Added `docs/M2_CELEBA_SETUP.md` with download, archive, count, checksum,
+  normalization, sampling, split, leakage, and visual-review instructions.
+- Validation: `conda run -n mpvs-m1 python -m compileall -q src tests` passed;
+  `conda run -n mpvs-m1 python -m pytest -q` passed 48 tests; all 23 notebook
+  cells parsed and all code cells compiled.
+- Status: implemented and synthetic-tested only. CelebA images were not
+  downloaded, and placeholder values are not frozen experiment decisions.
+- Next: download the authorized images, run normalization with checksums, run
+  the sampler with team-approved values, and inspect the generated metadata.
 
 ## 2026-10-28 — Gauri M2 real-data validation, Phase A
 

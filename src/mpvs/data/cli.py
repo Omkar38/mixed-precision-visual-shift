@@ -19,6 +19,11 @@ from mpvs.data.manifests import (
 from mpvs.data.pope import load_pope_jsonl
 from mpvs.data.records import AssignedRecord, NormalizedRecord, validate_normalized_records
 from mpvs.data.review import AnswerabilityDecision, validate_answerability_decisions
+from mpvs.data.sampling import (
+    CelebASamplingSpec,
+    sample_celeba_records,
+    validate_celeba_sample,
+)
 from mpvs.splits import SplitSpec, split_records, validate_assigned_records
 
 
@@ -117,6 +122,62 @@ def normalize_celeba(args: argparse.Namespace) -> int:
             "attribute_questions": _attribute_questions(args.attribute_question),
         },
     )
+
+
+def sample_celeba(args: argparse.Namespace) -> int:
+    records = [NormalizedRecord.from_dict(row) for row in read_jsonl(args.input)]
+    spec = CelebASamplingSpec(
+        seed=args.seed,
+        attributes=tuple(args.attribute),
+        per_label_count=args.per_label,
+    )
+    sampled = sample_celeba_records(records, spec)
+    validation = validate_celeba_sample(
+        sampled,
+        spec,
+        require_image_checksums=not args.allow_missing_image_checksums,
+    )
+    if not validation["valid"]:
+        raise ValueError(f"sampled CelebA records failed validation: {validation}")
+    digest = write_jsonl_immutable(args.output, (record.to_dict() for record in sampled))
+    metadata = {
+        "schema_version": 1,
+        "status": "success",
+        "source_manifest": str(args.input),
+        "source_manifest_sha256": sha256_file(args.input),
+        "sample_manifest": str(args.output),
+        "sample_manifest_sha256": digest,
+        "sampling_spec": spec.to_dict(),
+        "image_checksums_required": not args.allow_missing_image_checksums,
+        "validation": validation,
+    }
+    metadata_path = args.output.with_suffix(args.output.suffix + ".metadata.json")
+    metadata_digest = write_json_immutable(metadata_path, metadata)
+    _emit({**metadata, "metadata": str(metadata_path), "metadata_sha256": metadata_digest})
+    return 0
+
+
+def verify_manifest_images(args: argparse.Namespace) -> int:
+    records = [NormalizedRecord.from_dict(row) for row in read_jsonl(args.input)]
+    verified = attach_source_image_checksums(records, args.image_root)
+    validation = validate_normalized_records(verified, require_image_checksums=True)
+    if not validation["valid"]:
+        raise ValueError(f"image-verified records failed validation: {validation}")
+    digest = write_jsonl_immutable(args.output, (record.to_dict() for record in verified))
+    metadata = {
+        "schema_version": 1,
+        "status": "success",
+        "source_manifest": str(args.input),
+        "source_manifest_sha256": sha256_file(args.input),
+        "image_root": str(args.image_root),
+        "verified_manifest": str(args.output),
+        "verified_manifest_sha256": digest,
+        "validation": validation,
+    }
+    metadata_path = args.output.with_suffix(args.output.suffix + ".metadata.json")
+    metadata_digest = write_json_immutable(metadata_path, metadata)
+    _emit({**metadata, "metadata": str(metadata_path), "metadata_sha256": metadata_digest})
+    return 0
 
 
 def create_splits(args: argparse.Namespace) -> int:
@@ -226,6 +287,29 @@ def add_m2_parsers(subparsers: Any) -> None:
     celeba.add_argument("--output", type=Path, required=True)
     celeba.add_argument("--skip-image-checksums", action="store_true")
 
+    sample = subparsers.add_parser(
+        "m2-sample-celeba",
+        help="create an exact balanced deterministic CelebA sample",
+    )
+    sample.add_argument("--input", type=Path, required=True)
+    sample.add_argument("--attribute", action="append", required=True)
+    sample.add_argument("--per-label", type=int, required=True)
+    sample.add_argument("--seed", type=int, required=True)
+    sample.add_argument("--output", type=Path, required=True)
+    sample.add_argument(
+        "--allow-missing-image-checksums",
+        action="store_true",
+        help="temporary annotation-only testing; do not use for final manifests",
+    )
+
+    verify_images = subparsers.add_parser(
+        "m2-verify-images",
+        help="verify a normalized manifest's images and attach SHA-256 checksums",
+    )
+    verify_images.add_argument("--input", type=Path, required=True)
+    verify_images.add_argument("--image-root", type=Path, required=True)
+    verify_images.add_argument("--output", type=Path, required=True)
+
     split = subparsers.add_parser(
         "m2-split", help="create deterministic group-disjoint split manifests"
     )
@@ -260,6 +344,8 @@ def run_m2(args: argparse.Namespace) -> int:
     handlers = {
         "m2-normalize-pope": normalize_pope,
         "m2-normalize-celeba": normalize_celeba,
+        "m2-sample-celeba": sample_celeba,
+        "m2-verify-images": verify_manifest_images,
         "m2-split": create_splits,
         "m2-validate-splits": validate_splits,
         "m2-expand-variants": expand_manifest_variants,

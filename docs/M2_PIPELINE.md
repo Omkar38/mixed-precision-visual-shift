@@ -1,10 +1,11 @@
 # M2 Data and Corruption Pipeline
 
-Date: 2026-10-28
+Date: 2026-11-19
 
-Status: implemented and synthetic-unit-tested; real POPE-COCO and CelebA
-schemas, counts, access, balance, and pilot choices still require Gauri's
-validation.
+Status: implemented and synthetic-unit-tested. POPE-COCO was validated on real
+annotations and images. CelebA annotations were validated, and the balanced
+sampler is synthetic-tested, but CelebA images, final manifests, and pilot
+choices remain pending.
 
 ## Purpose
 
@@ -96,6 +97,50 @@ mpvs m2-normalize-celeba \
 The team must choose visible attributes and a balancing/sampling rule after
 checking the source data and terms. The loader only normalizes the explicitly
 selected attributes; it does not silently rebalance them.
+
+Detailed download, image verification, and placeholder sampling instructions
+are in [M2_CELEBA_SETUP.md](M2_CELEBA_SETUP.md). The temporary
+[Colab notebook](../notebooks/m2_celeba_colab_temp.ipynb) provides a
+storage-saving path that extracts only the selected images from a private Drive
+archive.
+
+## Deterministic CelebA sampling
+
+After normalization and image-checksum verification, create an exact balanced
+sample with explicit inputs:
+
+```bash
+mpvs m2-sample-celeba \
+  --input artifacts/m2/celeba-placeholder/celeba-normalized.jsonl \
+  --attribute Eyeglasses \
+  --attribute Wearing_Hat \
+  --attribute Smiling \
+  --per-label 200 \
+  --seed 590 \
+  --output artifacts/m2/celeba-placeholder/celeba-sampled.jsonl
+```
+
+These values are placeholders. The sampler requires exact yes/no balance for
+every requested attribute, permits at most one image per identity per
+attribute, and selects only one question for a source image. It also avoids
+selecting duplicate image bytes when checksums are available. Input ordering
+does not change the result.
+
+Image checksums are required by default. The explicit
+`--allow-missing-image-checksums` option is only for temporary annotation-only
+testing and must not be used for final manifests.
+
+For a storage-saving two-pass workflow, sample annotations temporarily, extract
+only the selected images, and attach their checksums:
+
+```bash
+mpvs m2-verify-images \
+  --input artifacts/m2/celeba-placeholder/celeba-sampled-unverified.jsonl \
+  --image-root /path/to/extracted-selected-images \
+  --output artifacts/m2/celeba-placeholder/celeba-sampled-verified.jsonl
+```
+
+Only the checksum-verified output may be used to create final-candidate splits.
 
 ## Deterministic group splitting
 
@@ -203,6 +248,7 @@ This records the review process; it does not automate semantic judgment.
 | `src/mpvs/data/records.py` | Normalized and split-assigned record contracts |
 | `src/mpvs/data/pope.py` | Strict one-variant POPE JSONL normalization |
 | `src/mpvs/data/celeba.py` | Attribute and identity parsing with explicit questions |
+| `src/mpvs/data/sampling.py` | Deterministic balanced CelebA sampling and validation |
 | `src/mpvs/data/images.py` | Source-image existence and SHA-256 verification |
 | `src/mpvs/data/manifests.py` | Canonical, atomic, immutable manifest I/O |
 | `src/mpvs/splits.py` | Deterministic group assignment and leakage validation |
@@ -210,7 +256,8 @@ This records the review process; it does not automate semantic judgment.
 | `src/mpvs/data/review.py` | Model-independent pilot answerability decisions |
 | `src/mpvs/data/cli.py` | M2 command-line entry points |
 
-Synthetic fixtures are in `tests/test_m2_loaders.py`, `tests/test_splits.py`,
+Synthetic fixtures are in `tests/test_m2_loaders.py`,
+`tests/test_celeba_sampling.py`, `tests/test_splits.py`,
 `tests/test_corruptions.py`, and `tests/test_answerability.py`.
 
 ## Gauri's real-data validation handoff

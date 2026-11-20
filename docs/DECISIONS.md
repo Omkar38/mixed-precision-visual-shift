@@ -114,6 +114,58 @@ must be regenerated.
 Protocol version/hash: Proposed, pending real-data validation.
 Owner: Gauri Chabukswar
 
+## 2026-11-19 — Proposed deterministic CelebA sampling policy
+
+Date: 2026-11-19
+Decision: Implement an explicit, seeded CelebA sampler that requests the
+attributes and exact per-label count at the command line. Process attributes in
+stable sorted order. For each attribute, select the label with fewer available
+identities first, rank candidates with SHA-256 of the seed and record identity,
+and require exact yes/no balance. Select at most one image per identity for an
+attribute and at most one question per source image. Do not select the same
+image bytes twice when checksums are available. Require image checksums for a
+final sample; allow missing checksums only through an explicit temporary flag.
+Reason and evidence: Real CelebA profiling showed strong label imbalance, and
+615 identities have mixed `Male` labels. The experiment needs deterministic
+balance without allowing one identity or image to dominate an attribute.
+Synthetic tests verify exact counts, input-order independence, identity/image
+limits, immutable CLI output, missing-checksum rejection, and clear failure
+when a requested sample is impossible.
+Alternatives considered: Sample every label independently without an identity
+limit; rejected because one person could contribute repeatedly. Permit one
+image to answer several attributes; rejected for the core sample so question
+counts also represent distinct source images. Hard-code the current example
+attributes and counts; rejected because those values still require team and
+pilot approval.
+Effect on comparability: The seed, attributes, per-label count, source-manifest
+hash, and sampler version must match across reruns. Changing any of them creates
+a new manifest and protocol version.
+Protocol version/hash: Proposed and synthetic-tested; pending team approval and
+real-image validation.
+
+## 2026-11-19 — Checksum-gated CelebA download fallback
+
+Date: 2026-11-19
+Decision: Try the official CelebA Google Drive files first. If Google rejects a
+download because of its public quota, the temporary Colab notebook may retrieve
+the same named file from the Freie Universität Berlin academic CelebA mirror.
+Accept and copy that file into private project storage only when its MD5 exactly
+matches the value published for `torchvision.datasets.CelebA`.
+Reason and evidence: Google quota failures affected both the image archive and
+the attribute annotations. The academic mirror states that it exists for this
+quota failure and provides the files used by torchvision. The strict checksum
+gate prevents a differently versioned or corrupted file from entering the M2
+pipeline.
+Alternatives considered: Repeatedly retry Google Drive or require manual
+downloads; retained as fallbacks, but they block an otherwise reproducible
+Colab run. Use an unchecked community copy; rejected.
+Effect on comparability: None when the checksum matches, because the accepted
+bytes are identical under the recorded MD5. Record the retrieval URL and hashes
+in the run artifacts. The CelebA license agreement still applies.
+Protocol version/hash: Operational data-retrieval decision; no experiment
+parameter is frozen or changed.
+Owner: Team decision pending.
+
 ## Template for a new decision
 
 Date:

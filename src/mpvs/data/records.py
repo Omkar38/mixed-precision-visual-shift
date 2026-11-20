@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import asdict, dataclass
 from pathlib import PurePosixPath
 from typing import Any, Iterable
@@ -118,6 +119,7 @@ def validate_normalized_records(
     image_identity: dict[str, str] = {}
     image_paths: dict[tuple[str, str], str] = {}
     image_checksums: dict[tuple[str, str], str | None] = {}
+    checksum_images: dict[str, set[str]] = defaultdict(set)
     conflicting_image_identities: list[str] = []
     conflicting_image_paths: list[str] = []
     conflicting_image_checksums: list[str] = []
@@ -139,6 +141,8 @@ def validate_normalized_records(
             and image_checksums[image_key] != record.source_image_sha256
         ):
             conflicting_image_checksums.append(f"{record.dataset}:{record.original_image_id}")
+        if record.source_image_sha256 is not None:
+            checksum_images[record.source_image_sha256].add(record.original_image_id)
         if record.dataset == "celeba":
             previous = image_identity.setdefault(record.original_image_id, record.identity_id or "")
             if previous != record.identity_id:
@@ -154,6 +158,11 @@ def validate_normalized_records(
         "conflicting_celeba_image_identities": sorted(set(conflicting_image_identities)),
         "conflicting_image_paths": sorted(set(conflicting_image_paths)),
         "conflicting_source_image_checksums": sorted(set(conflicting_image_checksums)),
+        "duplicate_source_image_checksums": [
+            {"sha256": checksum, "image_ids": sorted(image_ids)}
+            for checksum, image_ids in sorted(checksum_images.items())
+            if len(image_ids) > 1
+        ],
         "missing_source_image_checksums": sorted(missing_checksums),
     }
     report["valid"] = (
