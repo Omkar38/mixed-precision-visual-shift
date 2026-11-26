@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "status": "user_reported_private_artifacts_not_repository_inspected",
+  "review": {
+    "review_method": "Kaushal human visual review",
+    "decision_count": 588,
+    "answerable_count": 561,
+    "unanswerable_count": 27,
+    "missing_variant_id_count": 0,
+    "unknown_variant_id_count": 0,
+    "monotonic_consistency_violation_count": 0
+  },
+  "severity_summary": [
+    {
+      "kind": "darkness",
+      "severity_id": "dark-1-placeholder",
+      "value": 0.6,
+      "answerable": 97,
+      "unanswerable": 1,
+      "total": 98,
+      "answerable_percent": 98.98,
+      "accepted": true
+    },
+    {
+      "kind": "darkness",
+      "severity_id": "dark-2-placeholder",
+      "value": 0.35,
+      "answerable": 97,
+      "unanswerable": 1,
+      "total": 98,
+      "answerable_percent": 98.98,
+      "accepted": true
+    },
+    {
+      "kind": "darkness",
+      "severity_id": "dark-3-placeholder",
+      "value": 0.15,
+      "answerable": 86,
+      "unanswerable": 12,
+      "total": 98,
+      "answerable_percent": 87.76,
+      "accepted": false
+    },
+    {
+      "kind": "gaussian_blur",
+      "severity_id": "blur-1-placeholder",
+      "value": 0.5,
+      "answerable": 97,
+      "unanswerable": 1,
+      "total": 98,
+      "answerable_percent": 98.98,
+      "accepted": true
+    },
+    {
+      "kind": "gaussian_blur",
+      "severity_id": "blur-2-placeholder",
+      "value": 1.0,
+      "answerable": 97,
+      "unanswerable": 1,
+      "total": 98,
+      "answerable_percent": 98.98,
+      "accepted": true
+    },
+    {
+      "kind": "gaussian_blur",
+      "severity_id": "blur-3-placeholder",
+      "value": 2.0,
+      "answerable": 87,
+      "unanswerable": 11,
+      "total": 98,
+      "answerable_percent": 88.78,
+      "accepted": false
+    }
+  ],
+  "private_artifact_sha256": {
+    "celeba-sampled-verified.jsonl": "582c28314b7f936eef59b0c208043f9c8d76adcfae6fbc3746432f0432b6ce20",
+    "pilot-answerability-before-consistency-fix.jsonl": "3fe033663c57084f63bf8ec9ef228e87fa6f74e29966aede1d6b1686d40552a2",
+    "pilot-answerability-correction.json": "1c4e9ab4be19a082c63678cc6d537b409df082d1893366044e442e74087e3774",
+    "pilot-answerability-summary.json": "ae3eb23ce2f5b1d17c98dee65e5faa3dfc4b78ebee910292577fca1a129a223c",
+    "pilot-answerability.jsonl": "25026b06e992637632a15bcf73b87dc47116ac38b5e93841a4860f6822be4bcb",
+    "pilot-variants.jsonl": "83818c0aaad361fc7988a309243ed419e32ddb2313543e92833de270f040ab95",
+    "run-summary.json": "7cc65851558f9079f6b23ed8c9252683e7bbce81b1ce623e674dbde90366db29",
+    "splits/split-summary.json": "5794ae9e82005a6a2eb5fcaf46abcd634f93e5219a79eab006b3152f3d48a3b6"
+  }
+}

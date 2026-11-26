@@ -22,7 +22,12 @@ Measure storage without double-counting shared storage. Record peak allocated/re
 - Pilot groups do not enter development or test. Whole-group assignment takes precedence over exact target question counts.
 - Choose the POPE variant and visible CelebA attribute set during the pilot.
 - Proposed corruption implementations: multiply RGB intensity by a factor below one for darkness; use a documented Gaussian blur radius/kernel convention. Do not treat parameters from different libraries as interchangeable.
-- Freeze three severity values per corruption after model-independent answerability checks on pilot examples. Do not describe these as exact ImageNet-C reproductions unless that implementation is actually used.
+- Freeze up to three severity values per corruption and dataset after
+  model-independent answerability checks on pilot examples. Fewer levels are
+  allowed when stronger pilot candidates make a meaningful share of questions
+  unanswerable. Do not assume one Gaussian-blur radius has the same effect at
+  different source-image resolutions, and do not describe these as exact
+  ImageNet-C reproductions unless that implementation is actually used.
 - Freeze transformation order relative to resizing, image encoding, and processor behavior; use it for every candidate.
 - Proposed mixture construction: reuse one development image-group roster and assign each group one condition. At alpha in {0, .25, .5, .75, 1}, alpha is the intended fraction of target-condition questions. Handle indivisible groups with a prespecified rounding/allocation rule; record achieved question and image fractions. For alpha=0/1 all groups are clean/target. Use deterministic assignments shared across candidates.
 - Keep total questions and distinct image counts constant. Never count both clear and corrupted duplicates as extra independent examples in a mixture.

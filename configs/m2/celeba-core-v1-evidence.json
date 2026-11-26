@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "frozen_private_artifacts_user_reported_not_repository_inspected",
+  "run_id": "celeba-core-v1",
+  "sample": {
+    "record_count": 1200,
+    "pilot_record_count": 98,
+    "development_record_count": 605,
+    "test_record_count": 497,
+    "sample_manifest_sha256": "582c28314b7f936eef59b0c208043f9c8d76adcfae6fbc3746432f0432b6ce20",
+    "split_summary_sha256": "5ea08112a5554d402c4b703e1033d637dbc42382ba01fa203adaa30c16769cf5"
+  },
+  "corruptions": {
+    "configuration": "configs/m2/celeba-corruptions-v1.json",
+    "condition_count": 5,
+    "pilot_variant_count": 490,
+    "pilot_variants_sha256": "28704d98b2dc71df8382cd0d4fde58b615a1f26810cfef3f0ee69830aa07e357"
+  },
+  "answerability_review": {
+    "review_method": "Kaushal human visual review",
+    "decision_count": 392,
+    "expected_corrupted_pilot_variants": 392,
+    "answerable_count": 388,
+    "unanswerable_count": 4,
+    "missing_variant_ids": [],
+    "duplicate_variant_ids": [],
+    "unknown_variant_ids": [],
+    "non_pilot_variant_ids": [],
+    "valid": true,
+    "answerability_decisions_sha256": "9b705329739127670d53656d053426260f422703039a2bb0e548aa9291bc7d12",
+    "answerability_mapping_sha256": "a63c8fe0526e449ec757f097202435b8145f377b893991e79e45d851352d8569"
+  },
+  "run_summary_sha256": "219b216e61e61526901002c3afc80431aa608d770291c06181ab75ce665ba4ca",
+  "private_artifacts_tracked": false
+}

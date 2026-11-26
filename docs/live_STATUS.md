@@ -1,6 +1,6 @@
 # Current status
 
-Updated: 2026-11-19.
+Updated: 2026-11-26.
 
 ## Simple summary
 
@@ -9,18 +9,22 @@ Updated: 2026-11-19.
 - The M2 data-processing and placeholder CelebA sampling code is implemented
   and has 48 passing tests.
 - POPE-COCO annotations and all 500 source images were validated.
-- CelebA annotations and identity files were validated, but the CelebA images
-  were not downloaded or checked.
-- Trial splits passed the leakage and determinism checks. They are not final
-  splits.
-- No corruption severity, split size, seed, CelebA sample, or experimental
-  memory cap is frozen.
+- The private CelebA archive and annotations passed their published MD5 checks.
+  The balanced, checksum-verified `celeba-core-v1` sample, splits, corruption
+  variants, decisions, and provenance are frozen by recorded private hashes.
+- The final CelebA pilot has 98 clean and 392 corrupted variants. Its mapped
+  model-blind review is valid: 388 answerable and 4 unanswerable, with no
+  missing, duplicate, unknown, or non-pilot IDs.
+- Trial splits passed the leakage and determinism checks, but final versioned
+  manifests, POPE severities, split/sample choices, and memory caps are not
+  frozen.
 - M3 inference, M4 analysis, and the main experiment have not started.
 
 ## Current milestone
 
-M2 Phase A is complete. Phase B (final manifests) and Phase C (human pilot
-review) are not complete.
+The CelebA portion of M2 is complete and frozen as `celeba-core-v1`. POPE-COCO
+final manifests and its human corruption review remain pending, so overall M2
+is not complete.
 
 ## What is complete, partial, and not started
 
@@ -28,10 +32,10 @@ review) are not complete.
 | --- | --- | --- |
 | M1 model audit | Complete | Eight distinct configurations loaded, matched the request, and passed synthetic inference. |
 | POPE-COCO validation | Complete | Real annotations and 500 images were checked. |
-| CelebA validation | Partial | Annotation and identity files were checked; images were not checked. |
-| Final splits and balance | Partial | Trial splits passed; final balanced manifests do not exist. |
-| CelebA sampler | Implemented, synthetic-tested | Exact balance and identity/image limits pass tests; it has not run on checked CelebA images. |
-| Corruption pilot | Partial | Trial images were deterministic; no human answerability review was completed. |
+| CelebA validation | Complete for M2 | The private 1,200-record `celeba-core-v1` sample and selected images are checksum-verified; evidence hashes are tracked. |
+| Final splits and balance | Partial overall | CelebA 98/605/497 pilot/development/test artifacts are frozen privately; POPE final manifests remain pending. |
+| CelebA sampler | Complete for M2 | Exact 200/200 yes/no balance for each of three attributes, one question per image, and seed `590` are frozen in `celeba-core-v1`. |
+| Corruption pilot | Partial overall | CelebA has four accepted levels and 392 valid decisions; POPE review remains pending. |
 | Final memory caps | Not selected | Candidate memory sizes are measured, but experimental caps are not frozen. |
 | M3 inference/evaluation | Not started | Only the M1 synthetic smoke test exists. |
 | M4 statistics and main results | Not started | There are no dataset accuracy or delta results. |
@@ -58,35 +62,217 @@ These are examples, not approved settings:
   `4,493,569,888` bytes admits all eight candidates.
   Caps must be chosen before looking at comparative test accuracy.
 
+## Possible future corruption extensions
+
+These are optional extensions, not requirements for the current experiment.
+Complete the reproducible darkness/Gaussian-blur experiment first. Report any
+later corruption family as exploratory unless a new protocol version promotes
+it to a prespecified experiment.
+
+Possible families include:
+
+- geometric shift, defined precisely as affine shear, rotation, or perspective
+  distortion rather than the vague term `skewness`;
+- occlusion or pixel dropout, defined by a deterministic mask rather than the
+  vague term `missing bits`;
+- JPEG compression with an explicit encoder/library and quality value; and
+- additive sensor-style noise with an explicit distribution, scale, and seed.
+
+Before adding any family:
+
+1. State the scientific reason for it and whether it models acquisition,
+   transmission, geometry, or missing visual content. Do not add corruptions
+   only because they are easy to generate.
+2. Define the transform, parameter units, allowed range, library version,
+   transform order, color space, and whether it runs before model-processor
+   resizing. A name such as `missing bits` is not reproducible by itself.
+3. Reject transforms that silently change the ground-truth answer, crop away
+   the queried feature, expose padding artifacts as shortcuts, or affect one
+   question for an image differently from another question for that image.
+4. For random transforms, derive the random seed from the immutable source
+   image/group ID and corruption specification. Store the seed or mask
+   signature so repeated runs produce byte-identical pixels.
+5. Add explicit `CorruptionSpec` validation and implementation in
+   `src/mpvs/corruptions.py`. Include every parameter in the corruption
+   signature and therefore in prediction-cache keys.
+6. Add synthetic tests for parameter bounds, deterministic pixels, stable
+   signatures, complete paired variants, split/group inheritance, and invalid
+   configurations. Keep every question and candidate configuration paired on
+   the same transformed source image.
+7. Pilot candidate severities separately for POPE-COCO and CelebA when image
+   size or task semantics change their effect. Use only pilot images and a
+   model-blind human answerability review; never tune with development/test
+   model accuracy.
+8. Select or reject whole severity levels using a written pilot rule. Do not
+   remove individual examples because a model answered incorrectly. Record
+   accepted values, rejected values, reviewer evidence, and hashes in
+   `docs/DECISIONS.md` before evaluation.
+9. Re-estimate variant counts, runtime, storage, Colab limits, and statistical
+   comparisons. More corruption families multiply inference cost and increase
+   the number of reported comparisons; do not delay the core experiment for an
+   optional extension.
+10. Write extension outputs to a new versioned artifact directory and protocol
+    hash. Do not overwrite or mix them into the frozen darkness/blur results.
+
+The smallest safe extension is one precisely defined family with a few
+pilot-checked severities. Run it only after M3 caching and the core M4 analysis
+are working end to end.
+
+## Possible future CelebA attribute extensions
+
+The core decision remains three attributes (`Eyeglasses`, `Wearing_Hat`, and
+`Smiling`) with one selected question per source image. This keeps the image
+count equal to the question count, prevents a few faces from dominating the
+sample, and makes the first selection experiment easier to interpret.
+
+After the core experiment is reproducible, a new protocol version may test
+more visible attributes or multiple attribute questions for the same image.
+This could measure whether a precision allocation transfers across different
+visual concepts, but it changes the sampling unit and statistical dependence.
+
+Requirements for adding more attributes:
+
+1. Choose attributes that are visually observable and have clear yes/no
+   wording. Record source prevalence, identity coverage, mixed labels within an
+   identity, and any subjective or ambiguous semantics before inclusion.
+2. Avoid adding attributes only to increase question count. Each attribute
+   needs enough positive and negative identities for the same documented
+   balancing and identity-cap policy.
+3. Pilot-check clean-label visibility and corruption answerability separately
+   for every new attribute. Do not select attributes using model accuracy or
+   test results.
+4. Keep the original three-attribute result as the core analysis. Report a
+   larger attribute set as an extension or a new protocol version so the
+   denominator and task composition are not silently changed.
+
+Requirements for allowing multiple attributes on one image:
+
+1. Add an explicit sampler option such as `max_questions_per_image`; do not
+   silently remove the current one-question-per-image rule. Balance each
+   attribute and label while also limiting images per identity.
+2. Permit the same `original_image_id` only when its records have different
+   question/attribute IDs. Continue rejecting exact duplicate questions and
+   conflicting image paths, identities, labels, or checksums.
+3. Assign the image and its identity to one split before creating questions or
+   corruptions. Every question and transformed variant for that image must stay
+   in the same pilot/development/test split.
+4. Construct clean/target development mixtures by image or identity group, not
+   independently by question. Otherwise one image could appear in both visual
+   conditions and inflate the effective sample size.
+5. Report both unique-image and question counts. Treat questions from the same
+   face as correlated; keep identity-clustered uncertainty for CelebA rather
+   than treating each question as an independent observation.
+6. Include the question ID and attribute in prediction-cache keys while sharing
+   the same source-image checksum and corruption signature. Preserve paired
+   predictions for every model configuration.
+7. Extend synthetic tests for deterministic sampling, per-attribute balance,
+   allowed cross-attribute image reuse, forbidden duplicate questions,
+   identity leakage, complete variants, and stable cache keys.
+8. Repeat the private, model-blind answerability review for every new
+   image-question-corruption combination and re-estimate inference cost before
+   scaling.
+
+Do not mix this extension into the current `celeba-corruptions-v1` artifacts or
+rename the current placeholder run as extended data. Use new versioned
+manifests, decisions, protocol hashes, and result tables.
+
 ## How to continue
 
-1. The team approves the POPE variant, CelebA attributes, CelebA sample size,
-   balance rule, split seed, and target split sizes.
-2. Record those choices in `docs/DECISIONS.md`. Keep them marked proposed until
-   the pilot passes.
-3. Download the authorized CelebA images. Check file count, image existence,
-   checksums, duplicates, and visible labels. Do not commit the images.
-4. Run the deterministic CelebA sampler with the approved values. Its code and
-   tests are ready, but the current example values are placeholders.
-5. Create new final-candidate manifests. Run leakage, balance, checksum, and
-   determinism checks on both datasets. Do not reuse the trial manifests as
-   final evidence.
-6. Create pilot corruption variants. Review them by eye without model answers.
-   Select whole severity levels; do not remove examples because the model gets
-   them wrong.
-7. Freeze the accepted dataset choices, manifests, corruption values, and file
-   hashes in `docs/DECISIONS.md` and the experiment protocol.
-8. Choose candidate memory caps from the measured M1 values before viewing test
+1. Preserve the private `celeba-core-v1` directory exactly as hashed. Do not
+   commit its restricted manifests, review archive, or decisions.
+2. Select the POPE variant and final split targets, then complete its
+   model-blind corruption review. Do not reuse CelebA blur radii automatically,
+   because the source-image sizes differ.
+3. Freeze POPE's accepted manifests, corruption values, and private hashes in
+   `docs/DECISIONS.md` and the experiment protocol.
+4. Choose candidate memory caps from the measured M1 values before viewing test
    accuracy. Use caps that admit at least two distinct configurations.
-9. Implement M3: fixed prompt, strict yes/no parser, prediction records, atomic
+5. Implement M3: fixed prompt, strict yes/no parser, prediction records, atomic
    cache, resume support, and clear failure states.
-10. Run the disjoint pilot on real images. Measure accuracy, invalid answers,
-    runtime, and peak GPU memory. Freeze the final prompt, parser, caps, and run
-    settings.
-11. Only after the protocol is frozen, run the main experiment and M4 analysis.
+6. Run the disjoint model pilot on real images. Measure accuracy, invalid
+   answers, runtime, and peak GPU memory. Freeze the final prompt, parser, caps,
+   and run settings.
+7. Only after the protocol is frozen, run the main experiment and M4 analysis.
     Use development data for selection and untouched test data for final results.
 
 ## Detailed work log
+
+## 2026-11-26 — Froze private `celeba-core-v1` M2 artifacts
+
+- Regenerated the accepted 1,200-record CelebA design under the non-placeholder
+  run name `celeba-core-v1` with clean plus darkness `0.60`/`0.35` and Gaussian
+  blur `0.5`/`1.0`. The sample manifest hash matches the accepted pilot sample.
+- Generated 490 pilot variants. Mapped the existing model-blind decisions by
+  exact question ID, corruption kind, and numeric value to the final severity
+  IDs; validation accepted all 392 decisions with 388 answerable and 4
+  unanswerable and no ID/coverage failures.
+- Recorded the private sample, split summary, variants, decisions, mapping, and
+  run-summary hashes in `configs/m2/celeba-core-v1-evidence.json`. Restricted
+  data remains outside Git and was not independently inspected in the repo.
+- CelebA M2 is complete. Overall M2 remains open for the POPE final manifest and
+  model-blind corruption review.
+
+## 2026-11-26 — Documented future CelebA attribute extensions
+
+- Kept the core final-candidate design at three attributes and one question per
+  selected image.
+- Documented how a later protocol could add visible attributes or multiple
+  questions per image without breaking balance, identity-disjoint splits,
+  pairing, cache correctness, model-blind review, or clustered uncertainty.
+- Documentation only. The sampler and current CelebA sample were not changed;
+  the extension remains outside the core experiment.
+- Recorded the current attributes, question wording, 200-per-label rule, seeds,
+  split fractions, and achieved 98/605/497 allocation as accepted
+  final-candidate choices in `docs/DECISIONS.md`.
+
+## 2026-11-26 — Accepted two CelebA severities per corruption
+
+- User-reported Colab evidence shows that the CelebA archive and two annotation
+  files matched their published MD5 values. The private run sampled and
+  checksum-verified 1,200 images, then created a validation-passing placeholder
+  split with 98 pilot, 605 development, and 497 test records.
+- The model-blind pilot review contained all 588 required corrupted decisions:
+  no missing, duplicate, unknown, or non-pilot IDs. Its first validated version
+  reported 559 answerable and 29 unanswerable variants.
+- Accepted for the CelebA final candidate: darkness factors `0.60` and `0.35`,
+  plus Pillow Gaussian-blur radii `0.5` and `1.0`. Rejected as whole levels:
+  darkness `0.15` (87.76% answerable before correction) and blur `2.0`
+  (88.78%). No individual record is removed because of this decision.
+- One question caused three monotonicity flags. The reviewer re-inspected it
+  and marked all six versions answerable. The corrected private file contains
+  561 answerable and 27 unanswerable decisions with no missing/unknown IDs or
+  remaining monotonicity violations. Every accepted level is 97/98 (98.98%)
+  answerable.
+- Added `configs/m2/celeba-corruptions-v1.json` and recorded the decision in
+  `docs/DECISIONS.md`. Updated `docs/EXPERIMENT_PROTOCOL.md` to permit up to
+  three dataset-specific levels instead of requiring exactly three.
+- Added the user-reported private-artifact counts and SHA-256 values to
+  `configs/m2/celeba-pilot-evidence-v1.json`; restricted records remain outside
+  Git and were not independently inspected in the repository.
+- Next: approve the CelebA sample/split choices, generate new versioned final
+  manifests with the accepted config, complete the POPE human review, and then
+  begin M3 inference/cache implementation.
+
+## 2026-11-26 — Documented optional corruption-extension requirements
+
+- Added a future-only checklist for geometric distortion, deterministic
+  occlusion/pixel dropout, JPEG compression, and seeded noise.
+- Documented the required protocol, implementation, cache-key, pairing,
+  determinism, human-review, compute-budget, and versioning changes.
+- No additional corruption was implemented or approved. Darkness and Gaussian
+  blur remain the core experiment, and optional extensions remain blocked on a
+  reproducible core M3/M4 run.
+
+## 2026-11-25 — CelebA Colab notebook mount-cell repair
+
+- Restored the executable Google Drive mount and directory-initialization code
+  in `notebooks/m2_celeba_colab_temp.ipynb`; the cell had been commented out.
+- Confirmed `origin/Gauri-Commits` contains `pyproject.toml` and
+  `src/mpvs/data/sampling.py`, which the notebook checks before installation.
+- Validation: parsed the notebook as JSON, compiled every code cell with
+  Python's AST parser, and ran `git diff --check`; all passed.
+- The notebook has not been rerun in Colab after this repair. CelebA source
+  downloads, checksums, archive contents, sampling, and splits remain pending.
 
 ## 2026-11-19 — Placeholder CelebA sampler and low-level handoff
 

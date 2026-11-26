@@ -166,6 +166,113 @@ Protocol version/hash: Operational data-retrieval decision; no experiment
 parameter is frozen or changed.
 Owner: Team decision pending.
 
+## 2026-11-26 — Accepted CelebA core corruption severities
+
+Date: 2026-11-26
+Decision: For the CelebA core experiment, retain two darkness factors (`0.60`
+and `0.35`) and two Pillow Gaussian-blur radii (`0.5` and `1.0`). Apply the
+deterministic RGB transforms before the model processor, as implemented. Reject
+darkness factor `0.15` and blur radius `2.0` as whole severity levels. Use the
+versioned specification in `configs/m2/celeba-corruptions-v1.json`. This is a
+CelebA decision only; POPE-COCO requires its own pilot because image resolution
+and question content differ.
+Reason and evidence: A private, model-blind review covered all 588 corrupted
+variants from 98 CelebA pilot records. The first validated decision file had no
+missing, duplicate, unknown, or non-pilot IDs and reported 559 answerable and
+29 unanswerable variants. Before a reviewer consistency correction, the
+accepted levels were 97.96%, 98.98%, 98.98%, and 97.96% answerable,
+respectively. The rejected darkness `0.15` and blur `2.0` levels were only
+87.76% and 88.78% answerable. One question (`celeba::163296.jpg::Smiling`)
+produced three monotonicity flags; the reviewer re-inspected that image and
+marked all six corrupted versions answerable. The corrected private decision
+file has 588 decisions: 561 answerable and 27 unanswerable, with zero missing,
+unknown, or monotonicity violations. Every retained level has 97/98 (98.98%)
+answerable decisions. Preserve the original decisions, corrected decisions,
+correction log, per-severity report, and source hashes in private artifacts.
+The repository records the user-reported counts and hashes in
+`configs/m2/celeba-pilot-evidence-v1.json` but does not contain or independently
+inspect the restricted artifacts themselves.
+Alternatives considered: Keep the strongest levels and remove only their
+unanswerable records; rejected because it would break complete paired cohorts
+and make the evaluated sample severity-dependent. Test replacement levels
+`0.25` and `1.5`; deferred because the proposal permits up to three levels and
+the two retained levels already passed the pilot. Add new corruption families;
+deferred until the core experiment is complete.
+Effect on comparability: Every CelebA candidate configuration will use the same
+clean cohort and four accepted corrupted cohorts. The rejected levels will not
+appear in development or test evaluation. Changing these values, adding a
+third level, or applying them at another transform stage creates a new protocol
+and artifact version. POPE values are not inferred from this decision.
+Protocol version/hash: Accepted CelebA final-candidate decision; the overall
+experiment protocol remains unfrozen until final manifests, POPE severities,
+generation settings, memory caps, and hashes are recorded.
+Owner: Kaushal Shelke, model-blind human reviewer.
+
+## 2026-11-26 — Accepted CelebA core sample and split design
+
+Date: 2026-11-26
+Decision: Keep the core CelebA task at three visible attributes:
+`Eyeglasses` ("Is this person wearing eyeglasses?"), `Wearing_Hat` ("Is
+this person wearing a hat?"), and `Smiling` ("Is this person smiling?").
+Select 200 yes and 200 no records per attribute with sampling seed `590`, one
+question per selected source image, and the existing identity cap. Split with
+seed `590` and requested pilot/development/test fractions `1/12`, `1/2`, and
+`5/12`. Treat the observed 98/605/497 records as the accepted final-candidate
+allocation, subject to byte-identical regeneration and final manifest hashes.
+Reason and evidence: The private real-data run produced 1,200 selected records
+with exact per-attribute label balance, checksum-verified selected images, and
+a validation-passing identity-disjoint split. The 98-record pilot supported a
+complete 588-decision corruption review. One question per image keeps question
+and image counts aligned and prevents a few faces from contributing several
+attribute questions to the core result.
+Alternatives considered: Add more attributes or reuse each image for multiple
+questions; deferred as a versioned future extension because those choices
+change task composition, effective sample size, sampler validation, mixture
+assignment, and clustered analysis. Change the current seeds or force exact
+split counts; rejected without evidence, because whole-identity grouping takes
+priority over exact target counts.
+Effect on comparability: Every model configuration and corruption condition
+must use the same selected questions and identity-disjoint split manifests.
+Changing attributes, questions, sample counts, seeds, image-reuse policy, or
+fractions creates a new protocol version. Report both record and identity
+counts.
+Protocol version/hash: Accepted final-candidate data design. The main protocol
+remains unfrozen until the manifests are regenerated into a non-placeholder
+version, their hashes are recorded, and POPE/M3 settings are resolved.
+Owner: Kaushal Shelke.
+
+## 2026-11-26 — Frozen private CelebA M2 core artifacts
+
+Date: 2026-11-26
+Decision: Treat the private `celeba-core-v1` sample, split summary, five-condition
+pilot variants, mapped answerability decisions, mapping record, and run summary
+as the frozen CelebA M2 core artifacts identified in
+`configs/m2/celeba-core-v1-evidence.json`. Do not overwrite those files. Any
+change to the sample, splits, questions, corruption values/IDs, or review
+decisions requires a new run name and protocol version.
+Reason and evidence: The non-placeholder run reproduced the accepted
+1,200-record sample with SHA-256
+`582c28314b7f936eef59b0c208043f9c8d76adcfae6fbc3746432f0432b6ce20`.
+It generated 490 pilot variants: 98 clean and 392 corrupted. The 392 reviewed
+decisions mapped by exact question ID, corruption kind, and numeric value from
+the earlier model-blind review. Validation reported 388 answerable and 4
+unanswerable decisions, with no missing, duplicate, unknown, or non-pilot IDs.
+The variant, decision, mapping, split-summary, and run-summary hashes are
+recorded in the evidence JSON. Restricted manifests and images remain private;
+the repository records user-reported counts and hashes rather than their
+contents.
+Alternatives considered: Repeat the same visual review after changing only
+severity IDs; rejected as unnecessary because the source questions, image
+checksums, transform kinds, and numeric values were unchanged and the mapping
+is explicit and hashed. Reuse or rename the placeholder directory; rejected to
+preserve provenance.
+Effect on comparability: All CelebA M3/M4 runs must reference these exact
+private hashes and `configs/m2/celeba-corruptions-v1.json`. A mismatched hash is
+an incompatible run. POPE-COCO remains a separate data/severity decision.
+Protocol version/hash: CelebA M2 core frozen as `celeba-core-v1`; the overall
+experiment protocol remains unfrozen pending POPE and M3 settings.
+Owner: Kaushal Shelke.
+
 ## Template for a new decision
 
 Date:

@@ -1,0 +1,27 @@
+[
+  {
+    "kind": "clean",
+    "severity_id": "clean",
+    "value": null
+  },
+  {
+    "kind": "darkness",
+    "severity_id": "dark-1",
+    "value": 0.6
+  },
+  {
+    "kind": "darkness",
+    "severity_id": "dark-2",
+    "value": 0.35
+  },
+  {
+    "kind": "gaussian_blur",
+    "severity_id": "blur-1",
+    "value": 0.5
+  },
+  {
+    "kind": "gaussian_blur",
+    "severity_id": "blur-2",
+    "value": 1.0
+  }
+]
