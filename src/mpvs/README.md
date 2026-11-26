@@ -3,13 +3,13 @@
 M1 inventories the immutable SmolVLM2 checkpoint, independently controls the
 vision/connector/language precision allocation, audits realized NF4 state, and
 measures unique weight storage. The complete eight-candidate grid was validated
-on a T4; see `docs/M1_MAC_FINDINGS.md`.
+on a T4; see `passive_docs/M1_MAC_FINDINGS.md`.
 
 M2 provides strict POPE/CelebA normalization, portable image checksums,
 deterministic image/identity-group splits, immutable manifests, deterministic
 darkness/Gaussian-blur transforms, variant inheritance checks, and a
 model-independent pilot answerability review contract. See
-`docs/M2_PIPELINE.md` for the real-data handoff and CLI commands.
+`passive_docs/M2_PIPELINE.md` for the real-data handoff and CLI commands.
 
 ```bash
 conda env create -f environment-macos.yml

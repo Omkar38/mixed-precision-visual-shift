@@ -10,7 +10,9 @@ We will select a configuration using clear development images, then test it on d
 
 We are not training a new model, creating an image-restoration system, or inventing a new quantization algorithm. Our contribution is the controlled evaluation of whether the **choice of precision allocation transfers across image conditions**, and whether mixed development data helps.
 
-This handoff is based on the Final tab of the CSE590 proposal, read on 2026-10-05. See `docs/PROPOSAL_SNAPSHOT.md`. No professor approval or experimental outcome is established by this repository.
+This handoff is based on the Final tab of the CSE590 proposal, read on
+2026-10-05. See `passive_docs/PROPOSAL_SNAPSHOT.md`. No professor approval or
+experimental outcome is established by this repository.
 
 ## 2. A concrete example
 

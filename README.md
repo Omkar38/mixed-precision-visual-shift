@@ -4,18 +4,29 @@ CSE590-01, Fall 2026 — Gauri Chabukswar, Omkar Lashkare, and Kaushal Satish Sh
 
 **Question:** Under the same model-weight memory limit, do compression settings selected using clear images still work well on darker or blurrier images?
 
-**Current state:** Research handoff and repository scaffold. No model inference, dataset preparation, quantization audit, or experiment has been completed in this repository. There are no measured results.
+**Current state:** M1 is complete. The private CelebA M2 core is frozen, while
+POPE-COCO finalization and its human corruption review remain pending. M3 model
+evaluation has not started. See `docs/live_STATUS.md` for the only current
+status summary.
 
 ## Start here
 
 1. Read [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) for the complete project explanation.
 2. Read [AGENTS.md](AGENTS.md) for instructions shared by coding agents.
-3. Follow [the implementation plan](docs/IMPLEMENTATION_PLAN.md), beginning with M0.
-4. Record progress in [live_STATUS.md](docs/live_STATUS.md) and decisions in [DECISIONS.md](docs/DECISIONS.md).
+3. Read the [active documentation index](docs/README.md).
+4. Follow [the project plan and protocol](docs/PROJECT_PLAN.md) from the
+   current milestone in `live_STATUS.md`.
+5. Record progress in [live_STATUS.md](docs/live_STATUS.md) and decisions in
+   [DECISIONS.md](docs/DECISIONS.md).
 
 Open this repository folder in Claude Code or Codex. Claude's entry file imports the shared agent instructions; Codex uses `AGENTS.md`. Give either agent this prompt:
 
-> Read AGENTS.md, PROJECT_CONTEXT.md, docs/IMPLEMENTATION_PLAN.md, and docs/live_STATUS.md. Start with M0 and then implement M1. Verify the environment, inspect the actual model architecture, and build the component-level quantization audit. Do not assume all eight precision configurations work. Use small, reviewable changes and report what you actually ran. Keep the current research question and evaluation protocol. For commits made on my behalf, use the Git identity in docs/GIT_WORKFLOW.md, with no AI co-author trailer.
+> Read AGENTS.md, PROJECT_CONTEXT.md, docs/README.md, and
+> docs/live_STATUS.md. Continue only the next unfinished milestone recorded in
+> live_STATUS.md. Use small, reviewable changes and report what actually ran.
+> Keep the current research question and evaluation protocol. For commits made
+> on my behalf, use the Git identity in passive_docs/GIT_WORKFLOW.md, with no AI
+> co-author trailer.
 
 ## What goes in and comes out?
 
@@ -31,10 +42,11 @@ Example: We ask “Is there a dog in this image?” on clear and dark versions o
 
 - `PROJECT_CONTEXT.md`: full handoff, scope, hypotheses, and definitions.
 - `AGENTS.md` and `CLAUDE.md`: consistent coding-agent instructions.
-- `docs/EXPERIMENT_PROTOCOL.md`: experimental controls and output contracts.
-- `docs/IMPLEMENTATION_PLAN.md`: ordered work with acceptance criteria.
-- `docs/PROPOSAL_SNAPSHOT.md`: current proposal captured on 2026-10-05.
-- `docs/SOURCES.md`: research and implementation references.
+- `docs/PROJECT_PLAN.md`: ordered milestones, acceptance criteria, experimental
+  controls, and output contracts.
+- `docs/README.md`: short index of active documents and reading order.
+- `passive_docs/README.md`: stable historical/reference documents.
+- `passive_docs/PROPOSAL_SNAPSHOT.md`: proposal captured on 2026-10-05.
 - `configs/protocol.example.json`: draft protocol; null fields deliberately mark unresolved pilot decisions.
 - `scripts/preflight.py`: dependency-free environment inventory; it does not download models or execute inference.
 
@@ -47,7 +59,7 @@ python3 scripts/preflight.py --output artifacts/preflight.json
 
 The `mpvs` CLI lists and audits M1 candidates. The complete eight-candidate
 CUDA/NF4 grid was validated on a Tesla T4; see
-[the M1 findings](docs/M1_MAC_FINDINGS.md).
+[the M1 findings](passive_docs/M1_MAC_FINDINGS.md).
 
 ## Colab M1 component audit
 
@@ -63,9 +75,9 @@ The M2 Python pipeline normalizes an explicitly selected POPE-COCO variant or
 explicit CelebA attributes, verifies source images, creates deterministic
 image/identity-disjoint manifests, expands clean/darkness/Gaussian-blur
 variants, and validates model-independent pilot answerability decisions. See
-[the M2 pipeline handoff](docs/M2_PIPELINE.md). The implementation is validated
-with synthetic fixtures; actual dataset choices and severities remain pending
-real-data and pilot validation.
+[the M2 pipeline handoff](passive_docs/M2_PIPELINE.md). The implementation is validated
+with synthetic fixtures. CelebA M2 is frozen privately as `celeba-core-v1`;
+POPE-COCO finalization and human corruption review remain pending.
 
 ## Data and outputs
 
@@ -79,4 +91,4 @@ The repository expands the proposal into implementation instructions. It does no
 
 ## Git ownership
 
-The initial local commit uses **Omkar Lashkare <omkarvilas.lashkare@stonybrook.edu>**. Omkar requested **lashkareomkar@gmail.com** for subsequent local commits. The initial commit's authorship was preserved. See [Git workflow](docs/GIT_WORKFLOW.md) for attribution details. Omkar created this GitHub repository as public.
+The initial local commit uses **Omkar Lashkare <omkarvilas.lashkare@stonybrook.edu>**. Omkar requested **lashkareomkar@gmail.com** for subsequent local commits. The initial commit's authorship was preserved. See [Git workflow](passive_docs/GIT_WORKFLOW.md) for attribution details. Omkar created this GitHub repository as public.

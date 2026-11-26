@@ -24,7 +24,7 @@ audit then ran on a Colab Tesla T4. All eight requested FP16/NF4 tuples:
 
 The smallest measured cap containing at least two distinct supported
 configurations is **1,587,421,408 bytes**. This satisfies the M1 acceptance
-criterion in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). It demonstrates
+criterion in [PROJECT_PLAN.md](../docs/PROJECT_PLAN.md). It demonstrates
 candidate feasibility only; it does not freeze the final experimental cap or
 provide model-accuracy evidence.
 

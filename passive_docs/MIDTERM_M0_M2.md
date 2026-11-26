@@ -12,11 +12,11 @@ experiment has been run.** Every statement below is labelled as one of:
 - **Estimated** — planning figures with no evidential weight.
 - **Proposed** — design choices to be checked during the pilot and frozen before the main run.
 
-Related documents: the protocol is in [EXPERIMENT_PROTOCOL.md](EXPERIMENT_PROTOCOL.md),
-the milestone plan in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), and the
+Related documents: the protocol and milestone plan are in
+[PROJECT_PLAN.md](../docs/PROJECT_PLAN.md), and the
 proposal in [PROPOSAL_SNAPSHOT.md](PROPOSAL_SNAPSHOT.md). Kaushal's Mac M0/M1
 work is documented in
-[`M1_MAC_FINDINGS.md` on `Kaushal-Commits`](https://github.com/Omkar38/mixed-precision-visual-shift/blob/Kaushal-Commits/docs/M1_MAC_FINDINGS.md),
+[M1_MAC_FINDINGS.md](M1_MAC_FINDINGS.md),
 and Omkar's architecture and compute analysis in
 [`PROJECT_DEEP_DIVE.md` on `docs/project-deep-dive`](https://github.com/Omkar38/mixed-precision-visual-shift/blob/docs/project-deep-dive/docs/PROJECT_DEEP_DIVE.md).
 
@@ -270,7 +270,7 @@ them run on clearly labelled synthetic fixtures.
 - **Pilot disjointness:** pilot groups never appear in development or test.
 - **Label balance:** report the yes/no ratio per split; record any imbalance caused by whole-group assignment instead of silently rebalancing.
 
-Acceptance (from `IMPLEMENTATION_PLAN.md`): no group crosses splits, all
+Acceptance (now in `docs/PROJECT_PLAN.md`): no group crosses splits, all
 variants inherit their group, and manifests and transforms are reproducible.
 
 ---

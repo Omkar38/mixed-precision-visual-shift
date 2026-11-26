@@ -2,9 +2,13 @@
 
 ## Read before working
 
-Read `PROJECT_CONTEXT.md`, `docs/STATUS.md`, and `docs/IMPLEMENTATION_PLAN.md`. Before modifying experimental logic, read `docs/EXPERIMENT_PROTOCOL.md` and `docs/DECISIONS.md`. `CLAUDE.md` imports this file so Claude Code and Codex share the same rules.
+Read `PROJECT_CONTEXT.md`, `docs/live_STATUS.md`, and `docs/PROJECT_PLAN.md`.
+Before modifying experimental logic, also read `docs/DECISIONS.md`. `CLAUDE.md`
+imports this file so Claude Code and Codex share the same rules.
 
-This is a research implementation, currently at M0. Do not mistake the proposal or example configuration for working software or completed experiments.
+This is a research implementation. Use `docs/live_STATUS.md` for the current
+milestone; do not infer progress from the proposal, passive documents, or
+example configurations.
 
 ## Scientific requirements
 
@@ -36,7 +40,11 @@ This is a research implementation, currently at M0. Do not mistake the proposal 
 
 ## Collaboration and commits
 
-For changes made on Omkar's behalf, follow `docs/GIT_WORKFLOW.md`: use his name and verified-in-proposal email for both author and committer; do not use Codex/Claude as the author or append an AI co-author trailer. Do not rewrite existing authors or misattribute another person's work.
+For changes made on Omkar's behalf, follow
+`passive_docs/GIT_WORKFLOW.md`: use his name and verified-in-proposal email for
+both author and committer; do not use Codex/Claude as the author or append an AI
+co-author trailer. Do not rewrite existing authors or misattribute another
+person's work.
 
 Do not let two agents edit the same working tree concurrently. Use separate branches/worktrees with explicit file ownership for parallel work. Read the latest status and Git diff before starting; preserve other people's changes.
 
@@ -44,4 +52,7 @@ Commit coherent, reviewable changes after relevant validation when asked to comm
 
 ## End-of-session handoff
 
-Update `docs/STATUS.md` with changes, exact commands run, outcomes, limitations, and the next actionable task. Record protocol changes in `docs/DECISIONS.md`. Distinguish “implemented,” “unit-tested,” “GPU-tested,” and “experiment completed.” State blockers plainly.
+Update `docs/live_STATUS.md` with changes, exact commands run, outcomes,
+limitations, and the next actionable task. Record protocol changes in
+`docs/DECISIONS.md`. Distinguish “implemented,” “unit-tested,” “GPU-tested,” and
+“experiment completed.” State blockers plainly.

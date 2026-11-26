@@ -15,9 +15,8 @@ Updated: 2026-11-26.
 - The final CelebA pilot has 98 clean and 392 corrupted variants. Its mapped
   model-blind review is valid: 388 answerable and 4 unanswerable, with no
   missing, duplicate, unknown, or non-pilot IDs.
-- Trial splits passed the leakage and determinism checks, but final versioned
-  manifests, POPE severities, split/sample choices, and memory caps are not
-  frozen.
+- CelebA final manifests are frozen. POPE final manifests, POPE severities,
+  POPE split choices, and experimental memory caps are not frozen.
 - M3 inference, M4 analysis, and the main experiment have not started.
 
 ## Current milestone
@@ -40,27 +39,278 @@ is not complete.
 | M3 inference/evaluation | Not started | Only the M1 synthetic smoke test exists. |
 | M4 statistics and main results | Not started | There are no dataset accuracy or delta results. |
 
-## Example choices for team discussion only
+## Team Drive and private data
 
-These are examples, not approved settings:
+Authorized team workspace:
+[mixed-precision-visual-shift Google Drive](https://drive.google.com/drive/folders/1qjmMDGkSdEbg287UPCwk-Ct8Qb0UfE2E?usp=drive_link).
 
-- POPE variant: `adversarial`.
-- CelebA attributes: `Eyeglasses`, `Wearing_Hat`, and `Smiling`.
+The Drive currently contains:
+
+- `artifacts/` — generated private manifests, validation reports, review files,
+  hashes, and run summaries;
+- `celeba/` — the private CelebA source archive and annotations; and
+- `colab notebooks/` — the two notebooks used for the M1 GPU audit and M2
+  CelebA processing.
+
+Access is limited to the team email accounts. If the folder does not open,
+request access from the owner instead of making a public copy. Do not change the
+sharing setting of the CelebA folder or review packages.
+
+The GitHub repository may be private, but that does **not** change the data
+rules. Do not commit raw datasets, CelebA images, private manifests, review
+packages, access tokens, large artifacts, or model checkpoints. Commit only
+code, small non-restricted configurations, counts, and hashes. When Colab needs
+to clone the private repository, authenticate with an authorized team GitHub
+account or a Colab secret; never paste a token into a notebook cell or Git.
+
+## Plain-language terms used in this project
+
+### Freeze
+
+To **freeze** something means the team has finished the pilot check, accepted
+the exact values/files, and will not silently change them during evaluation.
+Frozen does not mean the file is technically locked. It means:
+
+- the accepted choice is written in `docs/DECISIONS.md`;
+- the exact file is identified by a SHA-256 hash;
+- later runs must use that same choice and hash; and
+- any change requires a new version name, new hashes, and a new decision entry.
+
+Example: `celeba-core-v1` is frozen. Do not overwrite it. A changed CelebA
+sample must be named something like `celeba-core-v2` and reviewed again.
+
+### Manifest
+
+A **manifest** is a small JSONL inventory describing what the experiment will
+use. It does not contain the image pixels. A row normally records the image
+path/ID, question, yes/no label, group or identity ID, split, and image
+checksum. Split manifests tell the runner exactly which records belong to:
+
+- `pilot` — small data used to test feasibility and choose settings;
+- `development` — data used to select the best model configuration; or
+- `test` — untouched data used only for final evaluation.
+
+All questions for one POPE image stay in one split. All records for one CelebA
+identity stay in one split.
+
+### Candidate
+
+The word **candidate** is used in three related ways:
+
+- A **model candidate** is one of the eight audited FP16/NF4 allocations across
+  the vision encoder, connector, and language backbone.
+- A **severity candidate** is a darkness or blur value being considered during
+  the pilot. It is not final until the human answerability review accepts it.
+- A **final-candidate manifest** is a regenerated, versioned manifest that has
+  passed validation but is waiting for its hashes/decision to be frozen.
+
+Do not confuse a requested model candidate with an audited working
+configuration. M1 verified all eight actual configurations on the T4.
+
+### Artifact, checksum, and memory cap
+
+- An **artifact** is any generated output: a manifest, JSON report, prediction
+  cache, review page, or run summary.
+- A **checksum/hash** is a digital fingerprint. Matching SHA-256 values mean
+  teammates used the same file bytes.
+- A **memory cap** is the maximum measured model-weight storage allowed in one
+  comparison. Every clean/target/mixed selection method must choose from the
+  same candidates that fit that cap.
+
+## Fixed choices and choices still pending
+
+### Frozen for CelebA
+
+- Run: `celeba-core-v1`.
+- Attributes: `Eyeglasses`, `Wearing_Hat`, and `Smiling`.
+- Sampling: 200 yes and 200 no per attribute; one question per image.
+- Seeds: sampling `590`, splitting `590`.
+- Split: 98 pilot, 605 development, 497 test records.
+- Conditions: clean, darkness `0.60`/`0.35`, Gaussian blur `0.5`/`1.0`.
+- Human review: 392/392 decisions valid; 388 answerable and 4 unanswerable.
+- Evidence: `configs/m2/celeba-core-v1-evidence.json` and the private hashed
+  Drive artifacts.
+
+### Still proposed for POPE-COCO
+
+- Variant: `adversarial`.
 - Split seed: `590`.
-- POPE split example: 17 pilot images (102 questions), 399 development images
-  (2,394 questions), and 84 test images (504 questions). Whole images must stay
-  together.
-- CelebA sample example: 400 questions per attribute, with 200 yes and 200 no.
-  A target split could be about 100 pilot, 600 development, and 500 test
-  questions. Exact counts may change because one identity cannot cross splits.
-- POPE corruption candidates already tried: darkness factors `0.60`, `0.35`,
-  and `0.15`; blur radii `1.5`, `3`, and `6`. These values are not approved.
-  CelebA may need smaller blur radii because its images are smaller.
-- Memory-cap examples from measured M1 storage:
-  `2,178,324,832` bytes admits four candidates,
-  `3,902,666,464` bytes admits six candidates, and
-  `4,493,569,888` bytes admits all eight candidates.
-  Caps must be chosen before looking at comparative test accuracy.
+- Possible split: 17 pilot images (102 questions), 399 development images
+  (2,394 questions), and 84 test images (504 questions). One image and all six
+  questions must stay together.
+- Pilot severity candidates: darkness `0.60`, `0.35`, `0.15`; Gaussian blur
+  `1.5`, `3`, `6`. These are not accepted yet and must receive a POPE-specific
+  visual review.
+
+### Still pending for M3
+
+- final memory caps;
+- prompt and image-processing settings;
+- strict yes/no parsing rule;
+- decoding settings;
+- prediction/cache schema implementation; and
+- full-run compute estimate.
+
+Measured M1 cap examples are `2,178,324,832` bytes (four candidates),
+`3,902,666,464` bytes (six), and `4,493,569,888` bytes (all eight). Choose caps
+before looking at comparative test accuracy.
+
+## STEPS for the next teammate
+
+### Step 1 — Get oriented and verify access
+
+1. Clone or pull the private repository using an authorized team GitHub
+   account. Do not start from an old notebook copy without checking the commit.
+2. Read, in order: `docs/README.md`, this status file,
+   `docs/PROJECT_PLAN.md`, and `docs/DECISIONS.md`.
+3. Open the team Drive link above and confirm that `artifacts/`, `celeba/`, and
+   `colab notebooks/` are visible.
+4. Run `git status --short --branch` before editing. Coordinate with the team if
+   another person has uncommitted changes in the same working tree.
+5. Do not modify or delete
+   `artifacts/celeba-core-v1`. Its hashes are already frozen.
+
+### Step 2 — Locate the POPE inputs
+
+The official POPE annotations and 500 referenced COCO images were validated in
+an earlier run (we have evidence that Gauri previously checked the POPE data, but the actual POPE/COCO files were not committed to Git), but the next teammate must confirm where those private/local
+files are stored. Do not assume they are present merely because this status
+says validation succeeded.
+
+Required input facts for one POPE variant are:
+
+- 3,000 questions;
+- 500 unique COCO images;
+- 1,500 `yes` and 1,500 `no` labels;
+- six questions per image; and
+- no missing images or duplicate question IDs.
+
+If the source files are not in the team Drive or authorized local storage,
+stop and obtain them from the teammate who performed the validation or rerun
+the documented official-source acquisition. Do not substitute an unknown copy.
+
+### Step 3 — Accept one POPE variant and create the split
+
+`adversarial` is the current proposed variant. Confirm its source counts and
+record acceptance in `docs/DECISIONS.md` before using model accuracy. Then run
+the M2 commands from the repository root (replace the example paths):
+
+```bash
+python -m pip install -e .
+
+mpvs m2-normalize-pope \
+  --annotations /private/path/to/coco_pope_adversarial.json \
+  --image-root /private/path/to/coco-val2014 \
+  --variant adversarial \
+  --output /private/path/to/pope-core-v1/pope-normalized.jsonl
+
+mpvs m2-split \
+  --input /private/path/to/pope-core-v1/pope-normalized.jsonl \
+  --output-dir /private/path/to/pope-core-v1/splits \
+  --seed 590 \
+  --pilot-fraction 0.034 \
+  --development-fraction 0.798 \
+  --test-fraction 0.168
+
+mpvs m2-validate-splits \
+  /private/path/to/pope-core-v1/splits/pilot.jsonl \
+  /private/path/to/pope-core-v1/splits/development.jsonl \
+  /private/path/to/pope-core-v1/splits/test.jsonl
+```
+
+The fractions target about 17/399/84 whole images. Record the achieved counts;
+whole-image grouping matters more than an exact fraction. The validation report
+must show no image, question, group, or checksum leakage.
+
+### Step 4 — Create and review POPE corruption candidates
+
+Create a JSON corruption file with exactly one clean condition and the proposed
+POPE darkness/blur candidates. Expand **only the pilot split** first:
+
+```bash
+mpvs m2-expand-variants \
+  --input /private/path/to/pope-core-v1/splits/pilot.jsonl \
+  --corruptions /private/path/to/pope-pilot-corruptions.json \
+  --output /private/path/to/pope-core-v1/pilot-variants.jsonl
+
+python scripts/m2_pilot_review.py \
+  --variants /private/path/to/pope-core-v1/pilot-variants.jsonl \
+  --image-root /private/path/to/coco-val2014 \
+  --output-dir /private/path/to/pope-core-v1/pilot-review
+```
+
+Open the private review page and judge only whether each question is still
+answerable by a human. Do not look at model predictions. Leave a box checked if
+the question remains visually answerable; uncheck it when darkness/blur hides
+the queried object. Review every corrupted question, export the decisions, and
+validate them:
+
+```bash
+mpvs m2-validate-answerability \
+  --variants /private/path/to/pope-core-v1/pilot-variants.jsonl \
+  --decisions /private/path/to/pope-core-v1/pilot-answerability.jsonl
+```
+
+Select or reject whole severity levels. Do not delete individual questions to
+improve scores. If review choices violate the expected mild-to-strong order,
+re-inspect those exact panels and record any correction.
+
+### Step 5 — Freeze `pope-core-v1`
+
+After choosing the accepted POPE levels:
+
+1. Create a non-placeholder corruption configuration under `configs/m2/`.
+2. Regenerate the POPE variants using only clean plus accepted levels.
+3. Rerun split leakage, variant completeness, checksum, and determinism checks.
+4. Save private outputs under a new Drive artifact directory named
+   `pope-core-v1`; never overwrite a pilot/placeholder directory.
+5. Calculate SHA-256 for the normalized manifest, split summary, corruption
+   config, pilot variants, answerability decisions, and run summary.
+6. Commit only a small evidence JSON containing counts and hashes.
+7. Record the accepted variant, split, severities, evidence, and limitations in
+   `docs/DECISIONS.md` and update this file.
+
+Overall M2 is complete only when both `celeba-core-v1` and `pope-core-v1` are
+frozen and reproducible by their recorded hashes.
+
+### Step 6 — Begin M3 only after M2 is complete
+
+M3 builds the model runner; it is not the main experiment yet.
+
+1. Implement the fixed prompt, image preprocessing, greedy decoding, and strict
+   yes/no parser.
+2. Write one prediction JSONL record per question, condition, and audited model
+   candidate.
+3. Add atomic, resumable caching. Cache keys must include model/processor
+   revisions, effective quantization signature, image checksum, corruption,
+   question/prompt, and decoding settings.
+4. Add tests for cache hits, incompatible keys, invalid answers, failures, and
+   resume behavior.
+5. Choose common measured memory caps before examining comparative test
+   accuracy. Every selection method at a cap uses the same eligible candidates.
+6. Run a small disjoint pilot at batch size 1 on the T4. Measure runtime, peak
+   GPU memory, invalid-answer rate, and cache/resume correctness.
+7. Freeze the prompt, parser, caps, decoding settings, and protocol hash only
+   after the pilot passes. Do not run the full experiment before this point.
+
+### Stop and ask for help when
+
+- a required private source file or authorized Drive folder is missing;
+- any checksum differs from its frozen value;
+- a split leaks an image, identity, group, or question;
+- a repeated run produces different manifest or transformed-image bytes;
+- the answerability decision file is incomplete or invalid;
+- an accepted model candidate fails its audited configuration or inference;
+- a cache key could reuse a prediction from different settings; or
+- completing the task would require tuning choices using test accuracy.
+
+### End-of-session handoff
+
+Before stopping work, update this file with the exact commands, outputs,
+limitations, and next task. Put material protocol choices in
+`docs/DECISIONS.md`. State whether work was only implemented, unit-tested,
+GPU-tested, or experimentally completed. Never claim completion from synthetic
+tests alone.
 
 ## Possible future corruption extensions
 
@@ -176,26 +426,42 @@ Do not mix this extension into the current `celeba-corruptions-v1` artifacts or
 rename the current placeholder run as extended data. Use new versioned
 manifests, decisions, protocol hashes, and result tables.
 
-## How to continue
-
-1. Preserve the private `celeba-core-v1` directory exactly as hashed. Do not
-   commit its restricted manifests, review archive, or decisions.
-2. Select the POPE variant and final split targets, then complete its
-   model-blind corruption review. Do not reuse CelebA blur radii automatically,
-   because the source-image sizes differ.
-3. Freeze POPE's accepted manifests, corruption values, and private hashes in
-   `docs/DECISIONS.md` and the experiment protocol.
-4. Choose candidate memory caps from the measured M1 values before viewing test
-   accuracy. Use caps that admit at least two distinct configurations.
-5. Implement M3: fixed prompt, strict yes/no parser, prediction records, atomic
-   cache, resume support, and clear failure states.
-6. Run the disjoint model pilot on real images. Measure accuracy, invalid
-   answers, runtime, and peak GPU memory. Freeze the final prompt, parser, caps,
-   and run settings.
-7. Only after the protocol is frozen, run the main experiment and M4 analysis.
-    Use development data for selection and untouched test data for final results.
-
 ## Detailed work log
+
+## 2026-11-26 — Added teammate-ready access, glossary, and next-step handoff
+
+- Added the authorized team Google Drive link and described its `artifacts/`,
+  `celeba/`, and `colab notebooks/` folders.
+- Defined `freeze`, `manifest`, the three meanings of `candidate`, `artifact`,
+  checksum, split roles, and memory cap in simple project-specific language.
+- Replaced the short next-step list with an executable POPE-to-M3 handoff:
+  access checks, source-count checks, command templates, human review, freeze
+  requirements, M3 implementation order, stop conditions, and end-of-session
+  reporting.
+- Clarified that a private GitHub repository does not authorize committing raw
+  CelebA/COCO data, private manifests, review packages, tokens, checkpoints, or
+  large artifacts. Those remain in the team Drive or authorized local storage.
+- Documentation only. No source data, manifest, experiment configuration,
+  model run, or private artifact changed.
+
+## 2026-11-26 — Split active and passive documentation
+
+- Reduced the frequently updated working set in `docs/` to the status,
+  decisions, one merged project-plan/protocol document, and a short
+  reading-order index.
+- Merged the former implementation plan and experiment protocol into
+  `docs/PROJECT_PLAN.md` while preserving separate milestone and scientific
+  control sections.
+- Moved stable historical/reference material to `passive_docs/`: the proposal
+  snapshot, M1 findings, completed CelebA setup guide, earlier M2 validation
+  report, M2 technical pipeline, Git workflow, and midterm progress document.
+  Added a passive-document index.
+- Updated repository links and agent instructions to use
+  `docs/live_STATUS.md`; the previously referenced `docs/STATUS.md` did not
+  exist. Passive documents do not override the active status, decisions, or
+  merged project plan/protocol.
+- Documentation organization only. No code, private artifact, manifest,
+  experiment setting, or result changed.
 
 ## 2026-11-26 — Froze private `celeba-core-v1` M2 artifacts
 
@@ -244,7 +510,7 @@ manifests, decisions, protocol hashes, and result tables.
   remaining monotonicity violations. Every accepted level is 97/98 (98.98%)
   answerable.
 - Added `configs/m2/celeba-corruptions-v1.json` and recorded the decision in
-  `docs/DECISIONS.md`. Updated `docs/EXPERIMENT_PROTOCOL.md` to permit up to
+  `docs/DECISIONS.md`. Updated `docs/PROJECT_PLAN.md` to permit up to
   three dataset-specific levels instead of requiring exactly three.
 - Added the user-reported private-artifact counts and SHA-256 values to
   `configs/m2/celeba-pilot-evidence-v1.json`; restricted records remain outside
@@ -295,7 +561,7 @@ manifests, decisions, protocol hashes, and result tables.
   mirror after an official-download failure. Every fallback file must match the
   published torchvision MD5 before it is copied to private Drive storage. This
   path is implemented but has not yet been run; the images remain unvalidated.
-- Added `docs/M2_CELEBA_SETUP.md` with download, archive, count, checksum,
+- Added `passive_docs/M2_CELEBA_SETUP.md` with download, archive, count, checksum,
   normalization, sampling, split, leakage, and visual-review instructions.
 - Validation: `conda run -n mpvs-m1 python -m compileall -q src tests` passed;
   `conda run -n mpvs-m1 python -m pytest -q` passed 48 tests; all 23 notebook
@@ -308,7 +574,7 @@ manifests, decisions, protocol hashes, and result tables.
 ## 2026-10-28 — Gauri M2 real-data validation, Phase A
 
 - Followed Kaushal's M2 handoff runbook. Full report:
-  [M2_REAL_DATA_VALIDATION.md](M2_REAL_DATA_VALIDATION.md).
+  [M2_REAL_DATA_VALIDATION.md](../passive_docs/M2_REAL_DATA_VALIDATION.md).
 - POPE-COCO (validated on real data): downloaded the three official POPE COCO
   files and the 500 referenced COCO val2014 images. All variants have 3000
   questions, 500 images, 1500/1500 yes/no, 6 questions per image, no duplicate
@@ -384,7 +650,7 @@ manifests, decisions, protocol hashes, and result tables.
   corruption specifications, split/group-preserving variant expansion, and a
   model-independent corrupted-pilot answerability decision contract.
 - Added CLI commands for normalization, splitting, leakage validation, variant
-  expansion, and answerability validation. Added `docs/M2_PIPELINE.md` as the
+  expansion, and answerability validation. Added `passive_docs/M2_PIPELINE.md` as the
   real-data validation handoff.
 - Validation: `conda run -n mpvs-m1 python -m pytest -q` passed 31 synthetic/unit
   tests; Python compilation, CLI help, and Git whitespace checks passed. This is
@@ -410,7 +676,7 @@ manifests, decisions, protocol hashes, and result tables.
 
 ## M0 prerequisite and M1 Mac slice (2026-10-16)
 
-- Added `docs/M1_MAC_FINDINGS.md` as the consolidated environment, implementation, findings, limitations, command, code-reference, and CUDA-handoff document.
+- Added `passive_docs/M1_MAC_FINDINGS.md` as the consolidated environment, implementation, findings, limitations, command, code-reference, and CUDA-handoff document.
 - Created the `mpvs-m1` Conda environment with Python 3.11.17. Added tested direct dependency pins in `environment-macos.yml` and the complete installed inventory in `requirements-macos-lock.txt`; `pip check` reports no broken requirements.
 - Resolved `HuggingFaceTB/SmolVLM2-2.2B-Instruct` and its processor to revision `482adb537c021c86670beed01cd58990d01e72e4`. Downloaded the checkpoint into the ignored Hugging Face cache.
 - Implemented the model adapter, stable eight-candidate grid, verified component classification, per-module dtype/quantization inventory, effective signatures, unique-storage accounting, atomic JSON output, and explicit NF4 rejection until the CUDA implementation is audited.
@@ -424,7 +690,7 @@ Commands also run: `conda create -n mpvs-m1 python=3.11 pip -y`; dependency inst
 
 ## 2026-10-27 — Gauri midterm M0–M2 progress document
 
-- Added `docs/MIDTERM_M0_M2.md`, scoped to M0–M2 as agreed by the team: environment setup (Mac dev environment from `Kaushal-Commits`, Colab L4 environment from this branch), a proposed end-to-end flowchart and M1 audit-gate flowchart, the questions M1 validation will answer and how each outcome changes the plan, the proposed M2 data/corruption pipeline with the leakage and determinism checks to be written, and a risk table covering compute, Colab limits, library compatibility, data access, and schedule.
+- Added `passive_docs/MIDTERM_M0_M2.md`, scoped to M0–M2 as agreed by the team: environment setup (Mac dev environment from `Kaushal-Commits`, Colab L4 environment from this branch), a proposed end-to-end flowchart and M1 audit-gate flowchart, the questions M1 validation will answer and how each outcome changes the plan, the proposed M2 data/corruption pipeline with the leakage and determinism checks to be written, and a risk table covering compute, Colab limits, library compatibility, data access, and schedule.
 - Every figure is labelled measured, implemented-not-run, estimated, or proposed. The per-config memory table is Omkar's estimate from `docs/project-deep-dive`; only the FP16 total (4,493,569,888 bytes) is measured (Kaushal, Mac CPU load).
 - Documentation only. No code, model download, GPU run, dataset access, or experiment was performed. The Colab notebook has still not been run.
 - Next: run `notebooks/m1_colab_cuda_nf4 gauri.ipynb` on an L4 and record its measurements here; then write the M2 synthetic-fixture leakage tests.
@@ -436,7 +702,7 @@ Commands also run: `conda create -n mpvs-m1 python=3.11 pip -y`; dependency inst
 - Second attempt, run from commit `8b55db6` via Colab Runtime → Run all on a Tesla T4: succeeded. Environment: Python 3.13, PyTorch 2.11.0+cu130 (CUDA 13.0), Transformers 4.52.4, Accelerate 1.15.0, bitsandbytes 0.50.2, Pillow 11.3.0, sentencepiece 0.2.2, num2words 0.5.14.
 - Measured: FP16 parameters confirmed; load 143.1 s including download; peak allocated/reserved after load 4,504,592,896 / 4,735,369,216 B; one synthetic 384×384 inference (greedy, 4 new tokens) 3.92 s first call; peak allocated/reserved during inference 4,932,262,912 / 5,322,571,776 B; answer `Yes.`.
 - Status: FP16 load and synthetic inference are **GPU-tested** on a T4. NF4 construction, quantization audit, real-image memory, per-answer runtime, and accuracy are not tested. Artifact JSON kept outside tracked files (Colab session storage).
-- Results added to `docs/MIDTERM_M0_M2.md` §2.1.
+- Results added to `passive_docs/MIDTERM_M0_M2.md` §2.1.
 - Next: implement selective NF4 replacement and run the component audit on the same Colab GPU; write the M2 synthetic-fixture leakage tests.
 
 ## Handoff rule
@@ -445,7 +711,7 @@ Every coding session should append what changed, exact validation commands and o
 
 ## Publication preparation (2026-10-05)
 
-- Omkar requested publication to a new repository and supplied `lashkareomkar@gmail.com` for future commits. Updated `docs/GIT_WORKFLOW.md` accordingly and set the repository-local Git identity to `Omkar Lashkare <lashkareomkar@gmail.com>`. The initial commit retains its existing authorship.
+- Omkar requested publication to a new repository and supplied `lashkareomkar@gmail.com` for future commits. Updated `passive_docs/GIT_WORKFLOW.md` accordingly and set the repository-local Git identity to `Omkar Lashkare <lashkareomkar@gmail.com>`. The initial commit retains its existing authorship.
 - Ran `git status --short --branch` (clean `main` before this documentation change), `git remote -v` (no remote), `git ls-files` (only the research scaffold), and `du -sh . .git` (236K/140K). No raw data, checkpoints, or large artifacts are tracked.
 - Ran `gh auth status`: the saved `Omkar38` token initially appeared invalid. Completed `gh auth login -h github.com -p https -w`, then verified the authenticated account with `gh api user --jq .login` (`Omkar38`).
 - Omkar created the GitHub repository as public. Added and verified `README.md` through the connected GitHub account, fetched that commit with `git fetch origin main`, merged the two histories with `git merge --allow-unrelated-histories --no-commit origin/main`, then ran `git commit -m 'Merge GitHub README with local project history'` and `git push -u origin main` successfully.

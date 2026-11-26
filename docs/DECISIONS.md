@@ -63,7 +63,8 @@ component in FP16 by passing its verified module root in the loader's skip
 list; audit the realized module classes and parameter quantization state after
 loading rather than trusting that list. The complete eight-candidate audit at
 commit `fdeea24367cf8f64fa9b5b8e9aea9de3beb5eafe` validated this behavior on a
-Tesla T4; detailed evidence is recorded in `docs/M1_MAC_FINDINGS.md`.
+Tesla T4; detailed evidence is recorded in
+`passive_docs/M1_MAC_FINDINGS.md`.
 
 Run each candidate in a fresh subprocess from the same pinned original
 checkpoint revision. A candidate is supported only if every supported linear
